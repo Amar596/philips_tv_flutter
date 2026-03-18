@@ -30,6 +30,22 @@ class WaulyEvent {
     );
   }
 
+  factory WaulyEvent.fromJson(Map<String, dynamic> json) {
+    return WaulyEvent(
+      rawMessage: json['rawMessage'],
+      receivedAt: DateTime.parse(json['receivedAt']),
+      type: EventType.values[json['type']],
+    );
+  }
+
+    Map<String, dynamic> toJson() {
+    return {
+      'rawMessage': rawMessage,
+      'receivedAt': receivedAt.toIso8601String(),
+      'type': type.index,
+    };
+  }
+
   static EventType _parseType(String message) {
     final m = message.toUpperCase();
     if (m.contains('STARTED')) return EventType.started;

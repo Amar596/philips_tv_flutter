@@ -1,10 +1,12 @@
-
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:philips_tv_flutter/events_database.dart';
 import '../models/wauly_event.dart';
 import '../services/native_event_service.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class WatchdogScreen extends StatefulWidget {
   const WatchdogScreen({super.key});
@@ -15,9 +17,12 @@ class WatchdogScreen extends StatefulWidget {
 
 class _WatchdogScreenState extends State<WatchdogScreen> {
   final List<WaulyEvent> _events = [];
+  final EventDatabase _db = EventDatabase.instance;
   StreamSubscription<String>? _subscription;
   final ScrollController _scrollController = ScrollController();
   bool _autoScroll = true;
+  final Map<String, DateTime> _recentEvents = {};
+  final Duration _dedupeWindow = const Duration(milliseconds: 500);
 
   // Define platform here as a class member
   static const platform = MethodChannel('com.example.watchdog_app/test');
@@ -30,23 +35,82 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
   @override
   void initState() {
     super.initState();
+    _loadSavedEvents();
     _startListening();
   }
 
+  Future<void> _loadSavedEvents() async {
+    try {
+      final events = await _db.readAllEvents();
+      setState(() {
+        _events.clear();
+        _events.addAll(events);
+        _updateCounters();
+      });
+      debugPrint('✅ Loaded ${events.length} events from database');
+    } catch (e) {
+      debugPrint('❌ Error loading events: $e');
+    }
+  }
+
+  void _updateCounters() {
+    _aliveCount = _events.where((e) => e.type == EventType.alive).length;
+    _crashCount = _events.where((e) => e.type == EventType.crash).length;
+    _lastEventTime = _events.isNotEmpty ? _events.first.receivedAt : null;
+  }
+
+  Future<void> _addEvent(WaulyEvent event) async {
+    if (event.rawMessage.contains('Event received (no message)') ||
+        event.rawMessage.contains('Wauly Alive Event received') ||
+        event.rawMessage.contains('WAULY ALIVE')||
+        event.rawMessage.contains('WAULY APP BACKGROUNDED')||
+        event.rawMessage.contains('Unknown event')) {
+      debugPrint('⏭️ Ignored unwanted event: ${event.rawMessage}');
+      return; // Skip this event completely
+    }
+
+    // Check for duplicates
+    final now = DateTime.now();
+    final lastSeen = _recentEvents[event.rawMessage];
+
+    if (lastSeen != null && now.difference(lastSeen) < _dedupeWindow) {
+      debugPrint('⏭️ Duplicate event ignored: ${event.rawMessage}');
+      return; // Skip duplicate
+    }
+
+    // Store this event
+    _recentEvents[event.rawMessage] = now;
+
+    // Clean up old entries
+    if (_recentEvents.length > 100) {
+      _recentEvents
+          .removeWhere((key, value) => now.difference(value) > _dedupeWindow);
+    }
+
+    try {
+      // Save to database first
+      await _db.createEvent(event);
+
+      // Then update UI
+      setState(() {
+        _events.insert(0, event);
+        _updateCounters();
+        if (_events.length > 500) {
+          _events.removeLast(); // Remove oldest event
+        }
+      });
+
+      debugPrint('✅ Event saved to database: ${event.rawMessage}');
+    } catch (e) {
+      debugPrint('❌ Error saving event: $e');
+    }
+  }
+  
   void _startListening() {
     _subscription = NativeEventService.eventStream.listen(
       (message) {
         final event = WaulyEvent.fromMessage(message);
-        setState(() {
-          _events.insert(0, event); // newest first
-          _lastEventTime = event.receivedAt;
-
-          if (event.type == EventType.alive) _aliveCount++;
-          if (event.type == EventType.crash) _crashCount++;
-
-          // Cap list at 500 entries
-          if (_events.length > 500) _events.removeLast();
-        });
+        _addEvent(event); // This now handles both saving and UI update
 
         if (_autoScroll && _scrollController.hasClients) {
           _scrollController.animateTo(
@@ -66,16 +130,23 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
   void dispose() {
     _subscription?.cancel();
     _scrollController.dispose();
+    _db.close();
     super.dispose();
   }
 
-  void _clearEvents() {
-    setState(() {
-      _events.clear();
-      _aliveCount = 0;
-      _crashCount = 0;
-      _lastEventTime = null;
-    });
+  Future<void> _clearEvents() async {
+    try {
+      await _db.deleteAll(); // Clear database
+      setState(() {
+        _events.clear();
+        _aliveCount = 0;
+        _crashCount = 0;
+        _lastEventTime = null;
+      });
+      debugPrint('✅ All events cleared');
+    } catch (e) {
+      debugPrint('❌ Error clearing events: $e');
+    }
   }
 
   @override
@@ -96,16 +167,6 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            icon: Icon(
-              _autoScroll
-                  ? Icons.vertical_align_bottom
-                  : Icons.vertical_align_center,
-              color: _autoScroll ? Colors.greenAccent : Colors.grey,
-            ),
-            tooltip: 'Auto-scroll',
-            onPressed: () => setState(() => _autoScroll = !_autoScroll),
-          ),
           IconButton(
             icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
             tooltip: 'Clear events',
@@ -139,13 +200,12 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-      onPressed: _sendTestEvent,
-      child: const Icon(Icons.play_arrow),
-      backgroundColor: Colors.blueAccent,
-    ),
-  );
-}
-
+        onPressed: _sendTestEvent,
+        child: const Icon(Icons.play_arrow),
+        backgroundColor: Colors.blueAccent,
+      ),
+    );
+  }
 
   // Add this method
   void _sendTestEvent() async {
@@ -215,16 +275,16 @@ class _SummaryBar extends StatelessWidget {
           _StatChip(
               label: 'Total', value: '$totalEvents', color: Colors.blueAccent),
           const SizedBox(width: 10),
-          _StatChip(
-              label: 'Alive', value: '$aliveCount', color: Colors.greenAccent),
-          const SizedBox(width: 10),
-          _StatChip(
-              label: 'Crashes', value: '$crashCount', color: Colors.redAccent),
+          // _StatChip(
+          //     label: 'Alive', value: '$aliveCount', color: Colors.greenAccent),
+          // const SizedBox(width: 10),
+          // _StatChip(
+          //     label: 'Crashes', value: '$crashCount', color: Colors.redAccent),
           const Spacer(),
           if (lastEventTime != null)
             Text(
-              'Last: ${_fmt(lastEventTime!)}',
-              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 11),
+              'Last Active Time : ${_fmt(lastEventTime!)}',
+              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 15),
             ),
         ],
       ),
@@ -298,18 +358,18 @@ class _EventTile extends StatelessWidget {
       ),
       title: Row(
         children: [
-        Expanded(
-      child:  Text(
-        event.rawMessage.length > 40
-            ? '${event.rawMessage.substring(0, 40)}...'
-            : event.rawMessage,
-        style: TextStyle(
+          Expanded(
+            child: Text(
+              event.rawMessage.length > 40
+                  ? '${event.rawMessage.substring(0, 40)}...'
+                  : event.rawMessage,
+              style: TextStyle(
                 color: config.textColor,
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-        ),
-      ),
-    ),
+              ),
+            ),
+          ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
@@ -319,7 +379,7 @@ class _EventTile extends StatelessWidget {
             ),
             child: Text(
               event.timeString,
-              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 9),
+              style: const TextStyle(color: Color(0xFF8B949E), fontSize: 10),
             ),
           ),
         ],
@@ -329,7 +389,7 @@ class _EventTile extends StatelessWidget {
         child: Text(
           event.displayType,
           style: TextStyle(
-            color: config.color.withOpacity(0.9), 
+            color: config.color.withOpacity(0.9),
             fontSize: 11,
             fontWeight: FontWeight.bold,
           ),
@@ -400,7 +460,7 @@ class _StatusDotState extends State<_StatusDot>
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.dispose(); // Only dispose the animation controller
     super.dispose();
   }
 
@@ -448,5 +508,3 @@ class _EmptyState extends StatelessWidget {
     );
   }
 }
-
-

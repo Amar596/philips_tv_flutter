@@ -31,10 +31,12 @@ class MainActivity : FlutterActivity() {
         Log.d(TAG, "=== onCreate called ===")
         
         // Register the BroadcastReceiver
+        if (!::receiver.isInitialized) {
         receiver = WaulyEventReceiver()
         val filter = IntentFilter(WaulyEventReceiver.ACTION)
         registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         Log.d(TAG, "✅ BroadcastReceiver registered for action: ${WaulyEventReceiver.ACTION}")
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

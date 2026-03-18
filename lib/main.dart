@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
 import 'screens/watchdog_screen.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 
-void main() {
+void main() async{
+    WidgetsFlutterBinding
+      .ensureInitialized(); 
+  final documentsDirectory = await getApplicationDocumentsDirectory();
+  final path = join(documentsDirectory.path, 'events.db');
   runApp(const WatchdogApp());
 }
 

@@ -8,69 +8,74 @@ import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 class WaulyEventReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION = "com.signalr.TESTCRASH_CRASH_EVENT"
         private const val TAG = "WaulyEventReceiver"
+        private const val DEDUPE_WINDOW_MS = 1000
 
         // Callback to push events to Flutter
         var onEventReceived: ((String) -> Unit)? = null
+
+        // Simple deduplication cache
+        private val recentMessages = ConcurrentHashMap<String, Long>()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
 
         Log.d(TAG, "=== onReceive called ===")
         Log.d(TAG, "Action: ${intent.action}")
-        Log.d(TAG, "Intent flags: ${intent.flags}")
         
         // Log all extras
         val extras: Bundle? = intent.extras
+        var message = ""
+        
         if (extras != null && !extras.isEmpty) {
             Log.d(TAG, "Extras keys: ${extras.keySet()}")
             for (key in extras.keySet()) {
-                Log.d(TAG, "Extra $key: ${extras.get(key)}")
-            }
-        } else {
-            Log.d(TAG, "Intent extras: null")
-        }
-        
-        // Log.d(TAG, "Calling package: ${intent.`package`}")
-        // Log.d(TAG, "Calling component: ${intent.component}")
-
-        if (intent.action == ACTION) {
-            // Try different possible extra keys
-            var message = intent.getStringExtra("crash_text")
-            if (message.isNullOrEmpty()) {
-                message = intent.getStringExtra("message")
-            }
-            if (message.isNullOrEmpty()) {
-                message = intent.getStringExtra("event")
-            }
-            if (message.isNullOrEmpty()) {
-                // If no string extra found, create a descriptive message
-                message = if (extras != null && !extras.isEmpty()) {
-                    "Event with ${extras.size()} extras"
-                } else {
-                    "Event received (no message)"
+                val value = extras.get(key)
+                Log.d(TAG, "Extra $key: $value")
+                // Capture the message from crash_text
+                if (key == "crash_text" && value is String) {
+                    message = value
                 }
             }
-            
-            val finalMessage = message ?: "Wauly Event"
-            val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-            val fullMessage = "$finalMessage"
+        }
+        
+        if (message.isEmpty()) {
+            message = "Unknown event"
+        }
 
-            //Log.d(TAG, "✅ Event received at $timestamp: $message")
+        // DEDUPLICATION LOGIC
+        val now = System.currentTimeMillis()
+        val lastTime = recentMessages[message]
+        
+        if (lastTime != null && (now - lastTime) < DEDUPE_WINDOW_MS) {
+            Log.d(TAG, "⏭️ Duplicate event ignored: $message")
+            return // Skip duplicate
+        }
+        
+        // Store this message
+        recentMessages[message] = now
+        
+        // Clean up old entries periodically
+        if (recentMessages.size > 100) {
+            val cutoff = now - DEDUPE_WINDOW_MS
+            recentMessages.entries.removeAll { it.value < cutoff }
+        }
 
+        Log.d(TAG, "✅ Event received: $message")
+
+        if (intent.action == ACTION) {
             if (onEventReceived != null) {
-                onEventReceived?.invoke(fullMessage)
+                onEventReceived?.invoke(message)
                 Log.d(TAG, "✅ Event forwarded to Flutter")
             } else {
                 Log.w(TAG, "⚠️ onEventReceived is NULL — Flutter not listening yet")
             }
-        } else {
-            Log.d(TAG, "Ignoring action: ${intent.action}")
         }
     }
 }
