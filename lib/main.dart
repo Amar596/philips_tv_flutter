@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
+import 'home_page.dart';
 
 void main() async{
     WidgetsFlutterBinding
@@ -28,7 +29,7 @@ class WatchdogApp extends StatelessWidget {
           secondary: Colors.cyanAccent,
         ),
       ),
-      home: const WatchdogScreen(),
+      home: HomePage(),
     );
   }
 }

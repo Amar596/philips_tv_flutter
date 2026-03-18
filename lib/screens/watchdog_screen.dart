@@ -17,12 +17,19 @@ class WatchdogScreen extends StatefulWidget {
 
 class _WatchdogScreenState extends State<WatchdogScreen> {
   final List<WaulyEvent> _events = [];
-  final EventDatabase _db = EventDatabase.instance;
+  late final EventDatabase _db;
+  //final EventDatabase _db = EventDatabase.instance;
   StreamSubscription<String>? _subscription;
   final ScrollController _scrollController = ScrollController();
   bool _autoScroll = true;
   final Map<String, DateTime> _recentEvents = {};
   final Duration _dedupeWindow = const Duration(milliseconds: 500);
+  final List<String> _ignoredPatterns = [
+    'Event received (no message)',
+    'Wauly Alive Event received',
+    'WAULY ALIVE',
+    'Unknown event',
+  ];
 
   // Define platform here as a class member
   static const platform = MethodChannel('com.example.watchdog_app/test');
@@ -35,12 +42,14 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
   @override
   void initState() {
     super.initState();
+    _db = EventDatabase.instance;
     _loadSavedEvents();
     _startListening();
   }
 
   Future<void> _loadSavedEvents() async {
     try {
+      await _db.database;
       final events = await _db.readAllEvents();
       setState(() {
         _events.clear();
@@ -109,6 +118,11 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
   void _startListening() {
     _subscription = NativeEventService.eventStream.listen(
       (message) {
+        // Skip if message contains any ignored pattern
+        if (_ignoredPatterns.any((pattern) => message.contains(pattern))) {
+          debugPrint('⏭️ Filtered out: $message');
+          return;
+        }
         final event = WaulyEvent.fromMessage(message);
         _addEvent(event); // This now handles both saving and UI update
 
@@ -130,7 +144,7 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
   void dispose() {
     _subscription?.cancel();
     _scrollController.dispose();
-    _db.close();
+    //_db.close();
     super.dispose();
   }
 

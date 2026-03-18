@@ -36,7 +36,8 @@ class EventDatabase {
   }
 
   Future<int> createEvent(WaulyEvent event) async {
-    final db = await instance.database;
+    final db = await database;
+    //final db = await instance.database;
     return await db.insert('events', {
       'rawMessage': event.rawMessage,
       'receivedAt': event.receivedAt.toIso8601String(),
@@ -45,7 +46,8 @@ class EventDatabase {
   }
 
   Future<List<WaulyEvent>> readAllEvents() async {
-    final db = await instance.database;
+    final db = await database;
+    //final db = await instance.database;
     final result = await db.query('events', orderBy: 'receivedAt DESC');
 
     return result
@@ -58,7 +60,8 @@ class EventDatabase {
   }
 
   Future<int> deleteAll() async {
-    final db = await instance.database;
+    final db = await database;
+    //final db = await instance.database;
     return await db.delete('events');
   }
 
