@@ -352,6 +352,11 @@ class _EventTile extends StatelessWidget {
 
   const _EventTile({required this.event});
 
+    // Helper method to format date
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = _eventConfig(event.type);
@@ -398,7 +403,10 @@ class _EventTile extends StatelessWidget {
           ),
         ],
       ),
-      subtitle: Padding(
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [ 
+        Padding(
         padding: const EdgeInsets.only(top: 4),
         child: Text(
           event.displayType,
@@ -409,6 +417,18 @@ class _EventTile extends StatelessWidget {
           ),
         ),
       ),
+      Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(
+          _formatDate(event.receivedAt),
+          style: const TextStyle(
+            color: Color(0xFF8B949E),
+            fontSize: 12,
+          ),
+        ),
+      ),
+        ],
+    ),
     );
   }
 

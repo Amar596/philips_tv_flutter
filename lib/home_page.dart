@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:philips_tv_flutter/widgets/brightness_controller.dart';
+import 'package:philips_tv_flutter/widgets/device_details.dart';
 import 'package:philips_tv_flutter/widgets/screen_capture.dart';
 import 'package:philips_tv_flutter/widgets/screen_rotation.dart';
 import 'package:philips_tv_flutter/widgets/volume_controller.dart';
@@ -36,22 +37,17 @@ class HomePage extends StatelessWidget {
                 fontSize: 30,
               ),
             ),
-            const SizedBox(height: 100),
+            const SizedBox(height: 10),
 
-                        // Features Section
+            // Features Section
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Device Controls',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
             ),
 
             const SizedBox(height: 16),
+
+            // Device Details Section
+            const DeviceDetails(),
 
             // Volume Controller
             const VolumeController(),
