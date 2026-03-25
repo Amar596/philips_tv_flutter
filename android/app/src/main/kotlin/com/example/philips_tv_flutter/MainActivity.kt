@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.os.Build
 import android.content.Context
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -33,12 +34,26 @@ class MainActivity : FlutterActivity() {
         Log.d(TAG, "=== onCreate called ===")
         
         // Register the BroadcastReceiver
+        // if (!::receiver.isInitialized) {
+        // receiver = WaulyEventReceiver()
+        // val filter = IntentFilter(WaulyEventReceiver.ACTION)
+        // registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        // Log.d(TAG, "✅ BroadcastReceiver registered for action: ${WaulyEventReceiver.ACTION}")
+        // }
+
         if (!::receiver.isInitialized) {
         receiver = WaulyEventReceiver()
         val filter = IntentFilter(WaulyEventReceiver.ACTION)
-        registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-        Log.d(TAG, "✅ BroadcastReceiver registered for action: ${WaulyEventReceiver.ACTION}")
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter)
         }
+        
+        Log.d(TAG, "✅ BroadcastReceiver registered")
+    }
+
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

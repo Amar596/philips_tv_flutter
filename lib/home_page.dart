@@ -5,6 +5,8 @@ import 'package:philips_tv_flutter/widgets/screen_capture.dart';
 import 'package:philips_tv_flutter/widgets/screen_rotation.dart';
 import 'package:philips_tv_flutter/widgets/volume_controller.dart';
 import 'screens/watchdog_screen.dart';
+import 'widgets/simple_connection_indicator.dart'; 
+
 
 class HomePage extends StatelessWidget {
   //const HomePage({super.key});
@@ -22,6 +24,11 @@ class HomePage extends StatelessWidget {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+                // Add connection indicator to app bar
+        actions: [
+          const SimpleConnectionIndicator(compact: true),
+          const SizedBox(width: 16),
+        ],
       ),
       body: RepaintBoundary(
         key: _screenshotKey,  // Key is attached here
