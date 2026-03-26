@@ -15,6 +15,10 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.BinaryMessenger
 import dev.fluttercommunity.plus.device_info.DeviceInfoPlusPlugin
 import io.flutter.plugins.GeneratedPluginRegistrant
+import java.io.File
+import android.net.Uri
+import androidx.core.content.FileProvider
+import android.provider.Settings
 
 class MainActivity : FlutterActivity() {
 
@@ -22,6 +26,7 @@ class MainActivity : FlutterActivity() {
         const val EVENT_CHANNEL = "com.example.watchdog_app/wauly_events"
         const val METHOD_CHANNEL = "com.example.watchdog_app/test"
         private const val TAG = "WatchdogMainActivity"
+        const val APK_CHANNEL = "apk_install"
     }
 
     private lateinit var receiver: WaulyEventReceiver
@@ -52,15 +57,14 @@ class MainActivity : FlutterActivity() {
         }
         
         Log.d(TAG, "✅ BroadcastReceiver registered")
-    }
-
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
     super.configureFlutterEngine(flutterEngine)
 
-            // Register all plugins including device_info_plus
-        GeneratedPluginRegistrant.registerWith(flutterEngine)
+    //         // Register all plugins including device_info_plus
+    GeneratedPluginRegistrant.registerWith(flutterEngine)
 
             // Set up EventChannel
         eventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
@@ -94,8 +98,24 @@ class MainActivity : FlutterActivity() {
                     result.notImplemented()
                 }
             }
+
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_CHANNEL)
+    .setMethodCallHandler { call, result ->
+        if (call.method == "installApk") {
+            val path = call.argument<String>("path")
+            if (path != null) {
+                installApk(path)
+                result.success(true)
+            } else {
+                result.error("ERROR", "Path is null", null)
+            }
+        } else {
+            result.notImplemented()
+        }   
+    }
         
         Log.d(TAG, "✅ Channels registered on $EVENT_CHANNEL and $METHOD_CHANNEL")
+        Log.d(TAG, "✅ Channels registered: EVENT, METHOD, APK")
     }
 
 
@@ -131,5 +151,61 @@ class MainActivity : FlutterActivity() {
     override fun onResume() {
     super.onResume()
     Log.d(TAG, "onResume called - checking eventChannel: $eventChannel")
+    }
+
+    private fun installApk(path: String) {
+    try {
+        
+        // Check if we can install packages
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !canInstallPackages()) {
+            Log.d(TAG, "Requesting install permission")
+            requestInstallPermission()
+            return
+        }
+        val file = File(path)
+        if (!file.exists()) {
+            Log.e(TAG, "❌ APK file does not exist at: $path")
+            return
+        }
+
+        val uri: Uri = FileProvider.getUriForFile(
+            this,
+            "$packageName.provider",
+            file
+        )
+
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION) 
+        }
+
+        // ✅ Check if installer exists
+        if (intent.resolveActivity(packageManager) != null) {
+            startActivity(intent)
+            Log.d(TAG, "✅ APK install intent launched")
+        } else {
+            Log.e(TAG, "❌ No app found to handle APK install")
+        }
+
+    } catch (e: Exception) {
+        Log.e(TAG, "❌ APK install failed: ${e.message}")
+    }
+    }
+
+    private fun canInstallPackages(): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        packageManager.canRequestPackageInstalls()
+    } else {
+        true
+    }
+    }
+
+    private fun requestInstallPermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+        startActivity(intent)
+    }
     }
 }
