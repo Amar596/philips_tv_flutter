@@ -19,6 +19,7 @@ import java.io.File
 import android.net.Uri
 import androidx.core.content.FileProvider
 import android.provider.Settings
+import android.content.pm.PackageManager
 
 class MainActivity : FlutterActivity() {
 
@@ -113,9 +114,32 @@ class MainActivity : FlutterActivity() {
             result.notImplemented()
         }   
     }
-        
-        Log.d(TAG, "✅ Channels registered on $EVENT_CHANNEL and $METHOD_CHANNEL")
-        Log.d(TAG, "✅ Channels registered: EVENT, METHOD, APK")
+
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_CHANNEL)
+    .setMethodCallHandler { call, result ->
+        when (call.method) {
+            "installApk" -> {
+                val path = call.argument<String>("path")
+                if (path != null) {
+                    installApk(path)
+                    result.success(true)
+                } else {
+                    result.error("ERROR", "Path is null", null)
+                }
+            }
+            "getPackageVersion" -> {
+                val packageName = call.argument<String>("packageName")
+                if (packageName != null) {
+                    val version = getPackageVersion(packageName)
+                    Log.d(TAG, "Returning version: $version for package: $packageName")
+                    result.success(version)
+                } else {
+                    result.error("ERROR", "Package name is null", null)
+                }
+            }
+            else -> result.notImplemented()
+        }
+    }
     }
 
 
@@ -206,6 +230,19 @@ class MainActivity : FlutterActivity() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
         val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
         startActivity(intent)
+    }
+    }
+
+    // Add this helper method
+    private fun getPackageVersion(packageName: String): String? {
+    return try {
+        val packageInfo = packageManager.getPackageInfo(packageName, 0)
+        Log.d(TAG, "✅ Package $packageName found, version: ${packageInfo.versionName}")
+        packageInfo.versionName
+    } catch (e: PackageManager.NameNotFoundException) {
+        Log.d(TAG, "ℹ️ Package not found: $packageName (this is normal if app not installed)")
+        Log.e(TAG, "Package not found: $packageName")
+        null
     }
     }
 }
