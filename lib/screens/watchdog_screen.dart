@@ -68,51 +68,107 @@ class _WatchdogScreenState extends State<WatchdogScreen> {
     _lastEventTime = _events.isNotEmpty ? _events.first.receivedAt : null;
   }
 
+  // Future<void> _addEvent(WaulyEvent event) async {
+  //   if (event.rawMessage.contains('Event received (no message)') ||
+  //       event.rawMessage.contains('Wauly Alive Event received') ||
+  //       event.rawMessage.contains('WAULY ALIVE')||
+  //       event.rawMessage.contains('WAULY APP BACKGROUNDED')||
+  //       event.rawMessage.contains('Unknown event')) {
+  //     debugPrint('⏭️ Ignored unwanted event: ${event.rawMessage}');
+  //     return; // Skip this event completely
+  //   }
+
+  //   // Check for duplicates
+  //   final now = DateTime.now();
+  //   final lastSeen = _recentEvents[event.rawMessage];
+
+  //   if (lastSeen != null && now.difference(lastSeen) < _dedupeWindow) {
+  //     debugPrint('⏭️ Duplicate event ignored: ${event.rawMessage}');
+  //     return; // Skip duplicate
+  //   }
+
+  //   // Store this event
+  //   _recentEvents[event.rawMessage] = now;
+
+  //   // Clean up old entries
+  //   if (_recentEvents.length > 100) {
+  //     _recentEvents
+  //         .removeWhere((key, value) => now.difference(value) > _dedupeWindow);
+  //   }
+
+  //   try {
+  //     // Save to database first
+  //     await _db.createEvent(event);
+
+  //     // Then update UI
+  //     setState(() {
+  //       _events.insert(0, event);
+  //       _updateCounters();
+  //       if (_events.length > 500) {
+  //         _events.removeLast(); // Remove oldest event
+  //       }
+  //     });
+
+  //     debugPrint('✅ Event saved to database: ${event.rawMessage}');
+  //   } catch (e) {
+  //     debugPrint('❌ Error saving event: $e');
+  //   }
+  // }
+
   Future<void> _addEvent(WaulyEvent event) async {
-    if (event.rawMessage.contains('Event received (no message)') ||
-        event.rawMessage.contains('Wauly Alive Event received') ||
-        event.rawMessage.contains('WAULY ALIVE')||
-        event.rawMessage.contains('WAULY APP BACKGROUNDED')||
-        event.rawMessage.contains('Unknown event')) {
-      debugPrint('⏭️ Ignored unwanted event: ${event.rawMessage}');
-      return; // Skip this event completely
-    }
+  debugPrint('🔍 Processing event: ${event.rawMessage} (Type: ${event.type})');
+  
+  // Check if this is a test event - always show test events
+  if (event.type == EventType.test) {
+    debugPrint('✅ Test event detected - will display');
+  }
+  
+  if (event.rawMessage.contains('Event received (no message)') ||
+      event.rawMessage.contains('Wauly Alive Event received') ||
+      event.rawMessage.contains('WAULY ALIVE')||
+      event.rawMessage.contains('WAULY APP BACKGROUNDED')||
+      event.rawMessage.contains('Unknown event')) {
+    debugPrint('⏭️ Ignored unwanted event: ${event.rawMessage}');
+    return; // Skip this event completely
+  }
 
-    // Check for duplicates
-    final now = DateTime.now();
-    final lastSeen = _recentEvents[event.rawMessage];
+  // Check for duplicates
+  final now = DateTime.now();
+  final lastSeen = _recentEvents[event.rawMessage];
 
-    if (lastSeen != null && now.difference(lastSeen) < _dedupeWindow) {
-      debugPrint('⏭️ Duplicate event ignored: ${event.rawMessage}');
-      return; // Skip duplicate
-    }
+  if (lastSeen != null && now.difference(lastSeen) < _dedupeWindow) {
+    debugPrint('⏭️ Duplicate event ignored: ${event.rawMessage}');
+    return; // Skip duplicate
+  }
 
-    // Store this event
-    _recentEvents[event.rawMessage] = now;
+  // Store this event
+  _recentEvents[event.rawMessage] = now;
 
-    // Clean up old entries
-    if (_recentEvents.length > 100) {
-      _recentEvents
-          .removeWhere((key, value) => now.difference(value) > _dedupeWindow);
-    }
+  // Clean up old entries
+  if (_recentEvents.length > 100) {
+    _recentEvents
+        .removeWhere((key, value) => now.difference(value) > _dedupeWindow);
+  }
 
-    try {
-      // Save to database first
-      await _db.createEvent(event);
+  try {
+    // Save to database first
+    await _db.createEvent(event);
+    debugPrint('💾 Event saved to DB: ${event.rawMessage}');
 
-      // Then update UI
-      setState(() {
-        _events.insert(0, event);
-        _updateCounters();
-        if (_events.length > 500) {
-          _events.removeLast(); // Remove oldest event
-        }
-      });
+    // Then update UI
+    setState(() {
+      _events.insert(0, event);
+      _updateCounters();
+      if (_events.length > 500) {
+        _events.removeLast(); // Remove oldest event
+      }
+    });
 
-      debugPrint('✅ Event saved to database: ${event.rawMessage}');
-    } catch (e) {
-      debugPrint('❌ Error saving event: $e');
-    }
+    debugPrint('✅ UI updated, total events: ${_events.length}');
+    debugPrint('✅ Event saved to database: ${event.rawMessage}');
+  } catch (e) {
+    debugPrint('❌ Error saving event: $e');
+  }
   }
   
   void _startListening() {
