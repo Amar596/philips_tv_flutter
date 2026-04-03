@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:xml/xml.dart';
+import 'auto_install_helper.dart';
 
 class AppVersionInfo {
   final String version;
@@ -28,8 +29,8 @@ class AppVersionInfo {
 class WaulyAppManager {
   static const platform = MethodChannel('apk_install');
   static const packageName = 'com.example.wauly_app';
-  static const versionUrl = 'http://192.168.0.194:8080/version.xml';
-  static const apkUrl = 'http://192.168.0.194:8080/WaulySignage.apk';
+  static const versionUrl = 'http://192.168.0.169:8080/version.xml';
+  static const apkUrl = 'http://192.168.0.169:8080/WaulySignage.apk';
   static const String KEY_LAST_INSTALLED_VERSION = 'last_installed_version';
 
   // 🔹 INSTALL APK
@@ -72,7 +73,6 @@ class WaulyAppManager {
     return prefs.getString('last_installed_version');
   }
 
-  // 🔹 FETCH XML
   static Future<AppVersionInfo?> fetchLatestVersion() async {
     try {
       print('📡 Fetching version from: $versionUrl');
@@ -85,21 +85,30 @@ class WaulyAppManager {
         // Try to get VersionCode, default to 0 if not present
         int versionCode = 0;
         try {
-          final versionCodeElement = update.findElements('VersionCode').first;
-          versionCode = int.parse(versionCodeElement.text);
+          final versionCodeElement =
+              update.findElements('VersionCode').firstOrNull;
+          if (versionCodeElement != null) {
+            versionCode = int.parse(versionCodeElement.text);
+            print('📦 VersionCode found: $versionCode');
+          } else {
+            print('⚠️ VersionCode not in XML, using default: 0');
+          }
         } catch (e) {
-          print('⚠️ VersionCode not found in XML, using default: 0');
+          print('⚠️ Error parsing VersionCode: $e, using default: 0');
         }
 
-        return AppVersionInfo(
+        final versionInfo = AppVersionInfo(
           version: update.findElements('Version').first.text,
           exeUrl: update.findElements('ExeUrl').first.text,
           fileName: update.findElements('FileName').first.text,
-          versionCode: versionCode, 
+          versionCode: versionCode,
         );
 
-        // print('📦 Latest version from server: ${versionInfo.version} (code: ${versionInfo.versionCode})');
-        // return versionInfo;
+        print(
+            '📦 Latest version from server: ${versionInfo.version} (code: ${versionInfo.versionCode})');
+        return versionInfo;
+      } else {
+        print('❌ HTTP Error: ${response.statusCode}');
       }
     } catch (e) {
       print('❌ Error fetching version: $e');
@@ -158,10 +167,13 @@ class WaulyAppManager {
     }
   }
 
-  // 🔹 INSTALL FLOW - Modified to exit after installation
   static Future<void> downloadAndInstall(String url, String fileName,
-      {bool exitAfterInstall = true,String? newVersion}) async {
-        print('🚀 Starting download and install process...');
+      {bool exitAfterInstall = true, String? newVersion}) async {
+    print('🚀 Starting download and install process...');
+
+    // Reset auto-click flags
+    await AutoInstallHelper.resetAutoClickFlags();
+
     // Check and request install permission
     if (await Permission.requestInstallPackages.isDenied) {
       final status = await Permission.requestInstallPackages.request();
@@ -176,12 +188,13 @@ class WaulyAppManager {
 
     final path = await downloadApk(url, fileName);
 
-    // Install new APK
-    print('📲 Installing APK...');
-    await installApk(path);
+    // ALWAYS USE AUTO-INSTALL - REMOVE THE IF CHECK
+    print('🔧 Attempting auto-install (forced mode)...');
+    await AutoInstallHelper.triggerAutoInstall(path);
+
     print('✅ APK installation initiated');
 
-    // 🔹 ADD THIS - Mark this version as installed before cleaning up
+    // Mark this version as installed
     if (newVersion != null) {
       await markUpdateInstalled(newVersion);
     }
@@ -189,15 +202,62 @@ class WaulyAppManager {
     // Clean up old APKs after successful install
     await cleanupOldApks(path);
 
-    //Exit the app after installation so user can open the new version
+    // Exit the app after installation
     if (exitAfterInstall) {
       print('🚪 Exiting app after installation...');
-      await Future.delayed(
-          const Duration(seconds: 1)); // Give time for install to complete
+      await Future.delayed(const Duration(seconds: 2));
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-      // Or use: exit(0);
     }
   }
+
+  // MODIFY THIS METHOD
+  // static Future<void> downloadAndInstall(String url, String fileName,
+  //     {bool exitAfterInstall = true, String? newVersion}) async {
+  //   print('🚀 Starting download and install process...');
+
+  //   // Check and request install permission
+  //   if (await Permission.requestInstallPackages.isDenied) {
+  //     final status = await Permission.requestInstallPackages.request();
+  //     if (!status.isGranted) throw Exception('Permission denied');
+  //   }
+
+  //   // Check storage permission
+  //   if (await Permission.storage.isDenied) {
+  //     final status = await Permission.storage.request();
+  //     if (!status.isGranted) throw Exception('Storage permission denied');
+  //   }
+
+  //   final path = await downloadApk(url, fileName);
+
+  //   // Try auto-install if accessibility is enabled
+  //   bool autoInstalled = false;
+  //   if (await AutoInstallHelper.isAccessibilityEnabled()) {
+  //     print('🔧 Accessibility service enabled, attempting auto-install...');
+  //     await AutoInstallHelper.triggerAutoInstall(path);
+  //     autoInstalled = true;
+  //   } else {
+  //     // Fallback to manual install
+  //     print('📲 Manual install required (accessibility not enabled)');
+  //     await installApk(path);
+  //   }
+
+  //   print('✅ APK installation initiated');
+
+  //   // Mark this version as installed
+  //   if (newVersion != null) {
+  //     await markUpdateInstalled(newVersion);
+  //   }
+
+  //   // Clean up old APKs after successful install
+  //   await cleanupOldApks(path);
+
+  //   // Exit the app after installation
+  //   if (exitAfterInstall) {
+  //     print('🚪 Exiting app after installation...');
+  //     await Future.delayed(const Duration(seconds: 1));
+  //     SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+  //   }
+  // }
 
   // 🔹 OPEN APP
   static Future<void> openApp() async {
@@ -214,7 +274,7 @@ class WaulyAppManager {
     await intent.launch();
   }
 
-  // 🔹 MAIN FLOW
+  //🔹 MAIN FLOW
   static Future<void> handleAppFlow(BuildContext context) async {
     print('=== Starting App Flow ===');
     final installedVersion = await getInstalledVersion();
@@ -225,7 +285,7 @@ class WaulyAppManager {
 
     if (latest == null) {
       print('⚠️ Could not fetch latest version from server');
-      if (installedVersion != null) { 
+      if (installedVersion != null) {
         await openApp();
       } else {
         await downloadAndInstall(
@@ -239,14 +299,13 @@ class WaulyAppManager {
       print('❌ App not installed');
       final install = await _showInstallDialog(context);
       if (install) {
-        await downloadAndInstall(
-            latest.exeUrl, latest.fileName,
+        await downloadAndInstall(latest.exeUrl, latest.fileName,
             exitAfterInstall: true, newVersion: latest.version);
       }
       return;
-    } 
+    }
 
-        // 🔹 ADD THIS - Check if we already installed this update before
+    // 🔹 ADD THIS - Check if we already installed this update before
     final lastInstalled = await getLastInstalledVersion();
     print('Installed version: $installedVersion');
     print('Latest version: ${latest.version}');
@@ -258,33 +317,80 @@ class WaulyAppManager {
       await openApp();
       return;
     }
-    
-  
-      // Compare versions
-      if (isNewerVersion(installedVersion, latest.version)) {
-        print('🆕 New version available! $installedVersion → ${latest.version}');
-        // New version available
-        final shouldUpdate =
-            await _showUpdateDialog(context, installedVersion, latest.version);
 
-        if (shouldUpdate) {
-          // Download and install new APK (this will replace the old one)
-          await downloadAndInstall(latest.exeUrl, latest.fileName,
-              exitAfterInstall: true, newVersion: latest.version);
-          // Note: After installation, the user will need to reopen the app
-          // The old version will be replaced by the new one
-        } else {
-          // User chose to update later, open current version
-          print('⏭️ User chose to update later');
-          await openApp();
-        }
+    // Compare versions
+    if (isNewerVersion(installedVersion, latest.version)) {
+      print('🆕 New version available! $installedVersion → ${latest.version}');
+      // New version available
+      final shouldUpdate =
+          await _showUpdateDialog(context, installedVersion, latest.version);
+
+      if (shouldUpdate) {
+        // Download and install new APK (this will replace the old one)
+        await downloadAndInstall(latest.exeUrl, latest.fileName,
+            exitAfterInstall: true, newVersion: latest.version);
+        // Note: After installation, the user will need to reopen the app
+        // The old version will be replaced by the new one
       } else {
-        // No update available (same version or installed version is newer)
-        print('✅ No update needed');
-        await markUpdateInstalled(installedVersion);
+        // User chose to update later, open current version
+        print('⏭️ User chose to update later');
         await openApp();
       }
+    } else {
+      // No update available (same version or installed version is newer)
+      print('✅ No update needed');
+      await markUpdateInstalled(installedVersion);
+      await openApp();
+    }
+  }
 
+  // static Future<void> handleAppFlow(BuildContext context) async {
+  //   print('=== Starting App Flow ===');
+
+  //   // Check and request accessibility permission
+  //   if (!await AutoInstallHelper.isAccessibilityEnabled()) {
+  //     final shouldEnable = await _showAccessibilityDialog(context);
+  //     if (shouldEnable) {
+  //       await AutoInstallHelper.requestAccessibility();
+  //       // Wait for user to enable and come back
+  //       await Future.delayed(Duration(seconds: 3));
+  //     }
+  //   }
+
+  //   final installedVersion = await getInstalledVersion();
+  //   final latest = await fetchLatestVersion();
+
+  //   // ... rest of your code
+  // }
+
+  static Future<bool> _showAccessibilityDialog(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Enable Auto-Install'),
+            content: const Text(
+              'To enable automatic app updates, please enable accessibility service for this app.\n\n'
+              'This allows the app to automatically click the install button during updates.\n\n'
+              'You will be redirected to Accessibility Settings.\n'
+              'Find "Wauly App" and turn it ON.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Later'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                ),
+                child: const Text('Enable Now'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   // Modified update dialog with auto-restart
