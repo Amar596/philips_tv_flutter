@@ -29,14 +29,18 @@ class AppVersionInfo {
 class WaulyAppManager {
   static const platform = MethodChannel('apk_install');
   static const packageName = 'com.example.wauly_app';
-  static const versionUrl = 'http://192.168.0.169:8080/version.xml';
-  static const apkUrl = 'http://192.168.0.169:8080/WaulySignage.apk';
+  static String versionUrl = 'http://192.168.0.105:8080/version.xml';
+  static String apkUrl = 'http://192.168.0.105:8080/WaulySignage.apk';
   static const String KEY_LAST_INSTALLED_VERSION = 'last_installed_version';
 
   // ADD THESE - Pending state keys
   static const String KEY_PENDING_INSTALL = 'pending_install';
   static const String KEY_PENDING_APK_PATH = 'pending_apk_path';
   static const String KEY_PENDING_VERSION = 'pending_version';
+
+    // ADD THESE CONSTANTS
+  static const String KEY_CUSTOM_VERSION_URL = 'custom_version_url';
+  static const String KEY_CUSTOM_APK_URL = 'custom_apk_url';
 
   // 🔹 INSTALL APK
   static Future<void> installApk(String filePath) async {
@@ -77,6 +81,51 @@ class WaulyAppManager {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('last_installed_version');
   }
+  
+    // 🔹 ADD THESE NEW METHODS
+
+  // Load saved URLs from SharedPreferences
+  static Future<void> loadSavedUrls() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedVersionUrl = prefs.getString(KEY_CUSTOM_VERSION_URL);
+    final savedApkUrl = prefs.getString(KEY_CUSTOM_APK_URL);
+
+    if (savedVersionUrl != null && savedVersionUrl.isNotEmpty) {
+      versionUrl = savedVersionUrl;
+      print('📋 Loaded saved version URL: $versionUrl');
+    }
+
+    if (savedApkUrl != null && savedApkUrl.isNotEmpty) {
+      apkUrl = savedApkUrl;
+      print('📋 Loaded saved APK URL: $apkUrl');
+    }
+  }
+
+    // Save custom URLs
+  static Future<void> saveCustomUrls(
+      String newVersionUrl, String newApkUrl) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(KEY_CUSTOM_VERSION_URL, newVersionUrl);
+    await prefs.setString(KEY_CUSTOM_APK_URL, newApkUrl);
+
+    versionUrl = newVersionUrl;
+    apkUrl = newApkUrl;
+
+    print('💾 Saved custom URLs - Version: $newVersionUrl, APK: $newApkUrl');
+  }
+
+  // Reset to default URLs
+  static Future<void> resetToDefaultUrls() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(KEY_CUSTOM_VERSION_URL);
+    await prefs.remove(KEY_CUSTOM_APK_URL);
+
+    versionUrl = 'http://192.168.0.169:8080/version.xml';
+    apkUrl = 'http://192.168.0.169:8080/WaulySignage.apk';
+
+    print('🔄 Reset to default URLs');
+  }  
+
 
   static Future<AppVersionInfo?> fetchLatestVersion() async {
     try {

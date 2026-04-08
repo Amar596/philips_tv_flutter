@@ -6,12 +6,12 @@ import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'home_page.dart';
+import 'screens/settings_screen.dart';
 
 void main() async{
-    WidgetsFlutterBinding
-      .ensureInitialized(); 
+    WidgetsFlutterBinding.ensureInitialized();
 
-      final hasPending = await WaulyAppManager.checkAndResumePendingInstallation();
+    final hasPending = await WaulyAppManager.checkAndResumePendingInstallation();
 
   if (hasPending) {
     // App will exit after installation, no need to continue
@@ -38,6 +38,9 @@ class WatchdogApp extends StatelessWidget {
         ),
       ),
       home: HomePage(),
+      routes: {
+        '/settings': (context) => const SettingsScreen(),
+      },
     );
   }
 }
