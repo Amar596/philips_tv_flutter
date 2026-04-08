@@ -21,18 +21,18 @@ class AutoInstallHelper {
     }
   }
 
-  static Future<bool> isAccessibilityEnabled() async {
-    // FORCE RETURN TRUE - BYPASS ACCESSIBILITY CHECK
-    return true;
+  // static Future<bool> isAccessibilityEnabled() async {
+  //   // FORCE RETURN TRUE - BYPASS ACCESSIBILITY CHECK
+  //   return true;
 
-    // Original code commented out
-    // try {
-    //   return await platform.invokeMethod('isAccessibilityEnabled');
-    // } catch (e) {
-    //   print('Failed to check accessibility: $e');
-    //   return false;
-    // }
-  }
+  //   // Original code commented out
+  //   // try {
+  //   //   return await platform.invokeMethod('isAccessibilityEnabled');
+  //   // } catch (e) {
+  //   //   print('Failed to check accessibility: $e');
+  //   //   return false;
+  //   // }
+  // }
 
   static Future<void> requestAccessibility() async {
     try {
@@ -47,6 +47,19 @@ class AutoInstallHelper {
       await platform.invokeMethod('resetFlags');
     } catch (e) {
       print('Failed to reset flags: $e');
+    }
+  }
+
+  static const MethodChannel _channel = MethodChannel('auto_install');
+
+  static Future<bool> isAccessibilityEnabled() async {
+    try {
+      final bool isEnabled =
+          await _channel.invokeMethod('isAccessibilityEnabled');
+      return isEnabled;
+    } catch (e) {
+      print('❌ Error checking accessibility: $e');
+      return false;
     }
   }
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="philips_tv_flutter">philips_tv_flutter</string>
+    <string name="accessibility_service_description">This service allows Wauly App to automatically
+        click install buttons during app updates, making the update process seamless and hands-free.</string>
+</resources>

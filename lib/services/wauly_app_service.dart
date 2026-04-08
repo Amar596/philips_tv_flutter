@@ -33,6 +33,11 @@ class WaulyAppManager {
   static const apkUrl = 'http://192.168.0.169:8080/WaulySignage.apk';
   static const String KEY_LAST_INSTALLED_VERSION = 'last_installed_version';
 
+  // ADD THESE - Pending state keys
+  static const String KEY_PENDING_INSTALL = 'pending_install';
+  static const String KEY_PENDING_APK_PATH = 'pending_apk_path';
+  static const String KEY_PENDING_VERSION = 'pending_version';
+
   // 🔹 INSTALL APK
   static Future<void> installApk(String filePath) async {
     await platform.invokeMethod('installApk', {"path": filePath});
@@ -82,7 +87,6 @@ class WaulyAppManager {
         final document = XmlDocument.parse(response.body);
         final update = document.findAllElements('Update').first;
 
-        // Try to get VersionCode, default to 0 if not present
         int versionCode = 0;
         try {
           final versionCodeElement =
@@ -138,7 +142,6 @@ class WaulyAppManager {
     final dir = await getExternalStorageDirectory();
     final path = '${dir!.path}/$fileName';
 
-    // Delete old APK if exists
     final file = File(path);
     if (await file.exists()) {
       await file.delete();
@@ -167,20 +170,87 @@ class WaulyAppManager {
     }
   }
 
+  // 🔹 SAVE PENDING INSTALLATION
+  static Future<void> savePendingInstallation(
+      String apkPath, String version) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(KEY_PENDING_INSTALL, true);
+    await prefs.setString(KEY_PENDING_APK_PATH, apkPath);
+    await prefs.setString(KEY_PENDING_VERSION, version);
+    print('💾 Saved pending installation - Path: $apkPath, Version: $version');
+  }
+
+  // 🔹 CLEAR PENDING INSTALLATION
+  static Future<void> clearPendingInstallation() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(KEY_PENDING_INSTALL);
+    await prefs.remove(KEY_PENDING_APK_PATH);
+    await prefs.remove(KEY_PENDING_VERSION);
+    print('🗑️ Cleared pending installation');
+  }
+
+  // 🔹 CHECK AND RESUME PENDING INSTALLATION - CALL THIS IN main() OR SPLASH SCREEN
+  static Future<bool> checkAndResumePendingInstallation() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasPending = prefs.getBool(KEY_PENDING_INSTALL) ?? false;
+
+    if (!hasPending) {
+      return false;
+    }
+
+    final pendingApkPath = prefs.getString(KEY_PENDING_APK_PATH);
+    final pendingVersion = prefs.getString(KEY_PENDING_VERSION) ?? '';
+
+    if (pendingApkPath == null || !await File(pendingApkPath).exists()) {
+      print('⚠️ Pending APK not found, clearing state');
+      await clearPendingInstallation();
+      return false;
+    }
+
+    print('🔄 Found pending installation, checking accessibility...');
+
+    // Check if accessibility is now enabled
+    final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
+
+    if (isEnabled) {
+      print('✅ Accessibility enabled, resuming installation');
+
+      await AutoInstallHelper.resetAutoClickFlags();
+      await AutoInstallHelper.triggerAutoInstall(pendingApkPath);
+      print('✅ APK installation initiated from pending state');
+
+      if (pendingVersion.isNotEmpty) {
+        await markUpdateInstalled(pendingVersion);
+      }
+
+      await cleanupOldApks(pendingApkPath);
+      await clearPendingInstallation();
+
+      // Exit after installation
+      await Future.delayed(const Duration(seconds: 2));
+      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+      return true;
+    } else {
+      print('❌ Accessibility still not enabled');
+      // Keep pending state for next app launch
+      return false;
+    }
+  }
+
+  // 🔹 MODIFIED DOWNLOAD AND INSTALL WITH PENDING STATE
   static Future<void> downloadAndInstall(String url, String fileName,
-      {bool exitAfterInstall = true, String? newVersion}) async {
+      {bool exitAfterInstall = true,
+      String? newVersion,
+      BuildContext? context}) async {
     print('🚀 Starting download and install process...');
 
-    // Reset auto-click flags
     await AutoInstallHelper.resetAutoClickFlags();
 
-    // Check and request install permission
     if (await Permission.requestInstallPackages.isDenied) {
       final status = await Permission.requestInstallPackages.request();
       if (!status.isGranted) throw Exception('Permission denied');
     }
 
-    // Check storage permission
     if (await Permission.storage.isDenied) {
       final status = await Permission.storage.request();
       if (!status.isGranted) throw Exception('Storage permission denied');
@@ -188,76 +258,51 @@ class WaulyAppManager {
 
     final path = await downloadApk(url, fileName);
 
-    // ALWAYS USE AUTO-INSTALL - REMOVE THE IF CHECK
-    print('🔧 Attempting auto-install (forced mode)...');
-    await AutoInstallHelper.triggerAutoInstall(path);
+    // Check if accessibility is enabled
+    final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
 
+    if (!isEnabled) {
+      print('❌ Accessibility not enabled, saving pending state');
+
+      // Save pending installation
+      await savePendingInstallation(path, newVersion ?? '');
+
+      // Show dialog and request accessibility
+      if (context != null) {
+        final enable = await _showAccessibilityDialog(context);
+        if (enable) {
+          await openAccessibilitySettings();
+          // App will close here, but state is saved
+          // User must reopen the app manually
+          return;
+        } else {
+          await clearPendingInstallation();
+          throw Exception('Accessibility permission required');
+        }
+      } else {
+        throw Exception(
+            'Accessibility permission required and no context provided');
+      }
+    }
+
+    // Accessibility is enabled, proceed with installation
+    print('🔧 Attempting auto-install...');
+    await AutoInstallHelper.triggerAutoInstall(path);
     print('✅ APK installation initiated');
 
-    // Mark this version as installed
     if (newVersion != null) {
       await markUpdateInstalled(newVersion);
     }
 
-    // Clean up old APKs after successful install
     await cleanupOldApks(path);
+    await clearPendingInstallation();
 
-    // Exit the app after installation
     if (exitAfterInstall) {
       print('🚪 Exiting app after installation...');
       await Future.delayed(const Duration(seconds: 2));
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
     }
   }
-
-  // MODIFY THIS METHOD
-  // static Future<void> downloadAndInstall(String url, String fileName,
-  //     {bool exitAfterInstall = true, String? newVersion}) async {
-  //   print('🚀 Starting download and install process...');
-
-  //   // Check and request install permission
-  //   if (await Permission.requestInstallPackages.isDenied) {
-  //     final status = await Permission.requestInstallPackages.request();
-  //     if (!status.isGranted) throw Exception('Permission denied');
-  //   }
-
-  //   // Check storage permission
-  //   if (await Permission.storage.isDenied) {
-  //     final status = await Permission.storage.request();
-  //     if (!status.isGranted) throw Exception('Storage permission denied');
-  //   }
-
-  //   final path = await downloadApk(url, fileName);
-
-  //   // Try auto-install if accessibility is enabled
-  //   bool autoInstalled = false;
-  //   if (await AutoInstallHelper.isAccessibilityEnabled()) {
-  //     print('🔧 Accessibility service enabled, attempting auto-install...');
-  //     await AutoInstallHelper.triggerAutoInstall(path);
-  //     autoInstalled = true;
-  //   } else {
-  //     // Fallback to manual install
-  //     print('📲 Manual install required (accessibility not enabled)');
-  //     await installApk(path);
-  //   }
-
-  //   print('✅ APK installation initiated');
-
-  //   // Mark this version as installed
-  //   if (newVersion != null) {
-  //     await markUpdateInstalled(newVersion);
-  //   }
-
-  //   // Clean up old APKs after successful install
-  //   await cleanupOldApks(path);
-
-  //   // Exit the app after installation
-  //   if (exitAfterInstall) {
-  //     print('🚪 Exiting app after installation...');
-  //     await Future.delayed(const Duration(seconds: 1));
-  //     SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-  //   }
-  // }
 
   // 🔹 OPEN APP
   static Future<void> openApp() async {
@@ -277,6 +322,14 @@ class WaulyAppManager {
   //🔹 MAIN FLOW
   static Future<void> handleAppFlow(BuildContext context) async {
     print('=== Starting App Flow ===');
+
+    // FIRST: Check for pending installation from previous session
+    final pendingResumed = await checkAndResumePendingInstallation();
+    if (pendingResumed) {
+      print('✅ Pending installation resumed and completed');
+      return;
+    }
+
     final installedVersion = await getInstalledVersion();
     final latest = await fetchLatestVersion();
 
@@ -289,8 +342,8 @@ class WaulyAppManager {
         await openApp();
       } else {
         await downloadAndInstall(
-            'http://192.168.0.169:8080/WaulySignage.apkwauly.apk', 'wauly.apk',
-            exitAfterInstall: true, newVersion: '');
+            'http://192.168.0.169:8080/WaulySignage.apk', 'wauly.apk',
+            exitAfterInstall: true, newVersion: '', context: context);
       }
       return;
     }
@@ -299,69 +352,69 @@ class WaulyAppManager {
       print('❌ App not installed');
       final install = await _showInstallDialog(context);
       if (install) {
-        await downloadAndInstall(latest.exeUrl, latest.fileName,
-            exitAfterInstall: true, newVersion: latest.version);
+        await downloadAndInstall(
+          latest.exeUrl,
+          latest.fileName,
+          exitAfterInstall: true,
+          newVersion: latest.version,
+          context: context,
+        );
       }
       return;
     }
 
-    // 🔹 ADD THIS - Check if we already installed this update before
     final lastInstalled = await getLastInstalledVersion();
     print('Installed version: $installedVersion');
     print('Latest version: ${latest.version}');
     print('Last installed marked: $lastInstalled');
 
-    // If we've already installed this update, just open the app
     if (lastInstalled == latest.version) {
       print('Already installed version ${latest.version}, opening app');
       await openApp();
       return;
     }
 
-    // Compare versions
     if (isNewerVersion(installedVersion, latest.version)) {
       print('🆕 New version available! $installedVersion → ${latest.version}');
-      // New version available
       final shouldUpdate =
           await _showUpdateDialog(context, installedVersion, latest.version);
 
       if (shouldUpdate) {
-        // Download and install new APK (this will replace the old one)
-        await downloadAndInstall(latest.exeUrl, latest.fileName,
-            exitAfterInstall: true, newVersion: latest.version);
-        // Note: After installation, the user will need to reopen the app
-        // The old version will be replaced by the new one
+        await downloadAndInstall(
+          latest.exeUrl,
+          latest.fileName,
+          exitAfterInstall: true,
+          newVersion: latest.version,
+          context: context,
+        );
       } else {
-        // User chose to update later, open current version
         print('⏭️ User chose to update later');
         await openApp();
       }
     } else {
-      // No update available (same version or installed version is newer)
       print('✅ No update needed');
       await markUpdateInstalled(installedVersion);
       await openApp();
     }
   }
 
-  // static Future<void> handleAppFlow(BuildContext context) async {
-  //   print('=== Starting App Flow ===');
+  static Future<bool> checkAccessibility(BuildContext context) async {
+    final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
 
-  //   // Check and request accessibility permission
-  //   if (!await AutoInstallHelper.isAccessibilityEnabled()) {
-  //     final shouldEnable = await _showAccessibilityDialog(context);
-  //     if (shouldEnable) {
-  //       await AutoInstallHelper.requestAccessibility();
-  //       // Wait for user to enable and come back
-  //       await Future.delayed(Duration(seconds: 3));
-  //     }
-  //   }
+    if (isEnabled) {
+      print('✅ Accessibility already enabled');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Accessibility already enabled')),
+        );
+      }
+      return true;
+    }
 
-  //   final installedVersion = await getInstalledVersion();
-  //   final latest = await fetchLatestVersion();
-
-  //   // ... rest of your code
-  // }
+    print('❌ Accessibility NOT enabled');
+    final enable = await _showAccessibilityDialog(context);
+    return enable;
+  }
 
   static Future<bool> _showAccessibilityDialog(BuildContext context) async {
     return await showDialog<bool>(
@@ -372,8 +425,13 @@ class WaulyAppManager {
             content: const Text(
               'To enable automatic app updates, please enable accessibility service for this app.\n\n'
               'This allows the app to automatically click the install button during updates.\n\n'
-              'You will be redirected to Accessibility Settings.\n'
-              'Find "Wauly App" and turn it ON.',
+              '⚠️ IMPORTANT: The app will close when you open Accessibility Settings.\n'
+              'After enabling the service, please manually reopen this app to continue the installation.\n\n'
+              'Steps:\n'
+              '1. Click "Enable Now" below\n'
+              '2. Find "" in the list\n'
+              '3. Turn it ON\n'
+              '4. Press back and reopen this app',
             ),
             actions: [
               TextButton(
@@ -393,7 +451,6 @@ class WaulyAppManager {
         false;
   }
 
-  // Modified update dialog with auto-restart
   static Future<bool> _showUpdateDialog(
       BuildContext context, String current, String latest) async {
     return await showDialog<bool>(
@@ -443,26 +500,25 @@ class WaulyAppManager {
         false;
   }
 
-  // 🔹 FORCE UPDATE (if you want to force users to update)
   static Future<void> forceUpdateIfNeeded(BuildContext context) async {
     final installedVersion = await getInstalledVersion();
     final latest = await fetchLatestVersion();
 
     if (latest != null && installedVersion != null) {
       if (isNewerVersion(installedVersion, latest.version)) {
-        // Force update - no "Later" option
         await showDialog(
           context: context,
           barrierDismissible: false,
           builder: (_) => AlertDialog(
             title: const Text('Mandatory Update'),
             content: Text(
-                'A new version ($latest) is required to continue.\n\nCurrent version: $installedVersion'),
+                'A new version (${latest.version}) is required to continue.\n\nCurrent version: $installedVersion'),
             actions: [
               ElevatedButton(
                 onPressed: () async {
                   Navigator.pop(context);
-                  await downloadAndInstall(latest.exeUrl, latest.fileName);
+                  await downloadAndInstall(latest.exeUrl, latest.fileName,
+                      context: context);
                 },
                 child: const Text('Update Now'),
               ),
@@ -472,6 +528,37 @@ class WaulyAppManager {
       } else {
         await openApp();
       }
+    }
+  }
+
+  static Future<void> openAccessibilitySettings() async {
+    final intent = AndroidIntent(
+      action: 'android.settings.ACCESSIBILITY_SETTINGS',
+      flags: [
+        Flag.FLAG_ACTIVITY_NEW_TASK,
+        Flag.FLAG_ACTIVITY_NO_HISTORY,
+      ],
+    );
+    await intent.launch();
+  }
+
+  static Future<void> checkAndHandleAccessibility(BuildContext context) async {
+    final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
+
+    if (isEnabled) {
+      print('✅ Accessibility already enabled');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Auto-install is already enabled')),
+        );
+      }
+    } else {
+      print('❌ Accessibility NOT enabled');
+      final enable = await _showAccessibilityDialog(context);
+      if (!enable) {
+        throw Exception('Accessibility permission required');
+      }
+      // Note: We don't open settings here - handled in downloadAndInstall
     }
   }
 }

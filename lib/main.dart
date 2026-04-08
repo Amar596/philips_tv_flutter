@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:philips_tv_flutter/services/wauly_app_service.dart';
 import 'screens/watchdog_screen.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -9,6 +10,13 @@ import 'home_page.dart';
 void main() async{
     WidgetsFlutterBinding
       .ensureInitialized(); 
+
+      final hasPending = await WaulyAppManager.checkAndResumePendingInstallation();
+
+  if (hasPending) {
+    // App will exit after installation, no need to continue
+    return;
+  }
   final documentsDirectory = await getApplicationDocumentsDirectory();
   final path = join(documentsDirectory.path, 'events.db');
   runApp(const WatchdogApp());
