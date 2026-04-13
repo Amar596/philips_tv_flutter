@@ -1,359 +1,3 @@
-// import 'package:flutter/material.dart';
-// import 'package:shared_preferences/shared_preferences.dart';
-// import 'package:philips_tv_flutter/services/wauly_app_service.dart';
-
-// class SettingsScreen extends StatefulWidget {
-//   const SettingsScreen({Key? key}) : super(key: key);
-
-//   @override
-//   State<SettingsScreen> createState() => _SettingsScreenState();
-// }
-
-// class _SettingsScreenState extends State<SettingsScreen> {
-//   final TextEditingController _versionUrlController = TextEditingController();
-//   final TextEditingController _apkUrlController = TextEditingController();
-//   bool _isLoading = false;
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     _loadCurrentUrls();
-//   }
-
-//   Future<void> _loadCurrentUrls() async {
-//     setState(() => _isLoading = true);
-
-//     final prefs = await SharedPreferences.getInstance();
-//     final savedVersionUrl =
-//         prefs.getString(WaulyAppManager.KEY_CUSTOM_VERSION_URL);
-//     final savedApkUrl = prefs.getString(WaulyAppManager.KEY_CUSTOM_APK_URL);
-
-//     setState(() {
-//       _versionUrlController.text =
-//           savedVersionUrl ?? WaulyAppManager.versionUrl;
-//       _apkUrlController.text = savedApkUrl ?? WaulyAppManager.apkUrl;
-//       _isLoading = false;
-//     });
-//   }
-
-//   Future<void> _saveUrls() async {
-//     final versionUrl = _versionUrlController.text.trim();
-//     final apkUrl = _apkUrlController.text.trim();
-
-//     if (versionUrl.isEmpty || apkUrl.isEmpty) {
-//       _showSnackBar('Please enter both URLs', isError: true);
-//       return;
-//     }
-
-//     if (!versionUrl.startsWith('http://') &&
-//         !versionUrl.startsWith('https://')) {
-//       _showSnackBar('Version URL must start with http:// or https://',
-//           isError: true);
-//       return;
-//     }
-
-//     if (!apkUrl.startsWith('http://') && !apkUrl.startsWith('https://')) {
-//       _showSnackBar('APK URL must start with http:// or https://',
-//           isError: true);
-//       return;
-//     }
-
-//     setState(() => _isLoading = true);
-
-//     try {
-//       await WaulyAppManager.saveCustomUrls(versionUrl, apkUrl);
-//       _showSnackBar('URLs saved successfully!', isError: false);
-
-//       // Test connection
-//       await _testConnection();
-//     } catch (e) {
-//       _showSnackBar('Error saving URLs: $e', isError: true);
-//     } finally {
-//       setState(() => _isLoading = false);
-//     }
-//   }
-
-//   Future<void> _testConnection() async {
-//     try {
-//       final versionInfo = await WaulyAppManager.fetchLatestVersion();
-//       if (versionInfo != null) {
-//         _showSnackBar(
-//           'Connection successful!\nLatest version: ${versionInfo.version}',
-//           isError: false,
-//           duration: const Duration(seconds: 4),
-//         );
-//       } else {
-//         _showSnackBar('Could not fetch version info', isError: true);
-//       }
-//     } catch (e) {
-//       _showSnackBar('Connection test failed: $e', isError: true);
-//     }
-//   }
-
-//   Future<void> _resetToDefaults() async {
-//     final confirm = await showDialog<bool>(
-//       context: context,
-//       builder: (context) => AlertDialog(
-//         title: const Text('Reset URLs'),
-//         content: const Text('Are you sure you want to reset to default URLs?'),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context, false),
-//             child: const Text('Cancel'),
-//           ),
-//           ElevatedButton(
-//             onPressed: () => Navigator.pop(context, true),
-//             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-//             child: const Text('Reset'),
-//           ),
-//         ],
-//       ),
-//     );
-
-//     if (confirm == true) {
-//       setState(() => _isLoading = true);
-//       await WaulyAppManager.resetToDefaultUrls();
-//       await _loadCurrentUrls();
-//       _showSnackBar('Reset to default URLs', isError: false);
-//       setState(() => _isLoading = false);
-//     }
-//   }
-
-//   void _showSnackBar(String message,
-//       {required bool isError, Duration? duration}) {
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       SnackBar(
-//         content: Text(message),
-//         backgroundColor: isError ? Colors.red : Colors.green,
-//         duration: duration ?? const Duration(seconds: 2),
-//       ),
-//     );
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Server Configuration'),
-//         elevation: 0,
-//       ),
-//       body: _isLoading
-//           ? const Center(child: CircularProgressIndicator())
-//           : SingleChildScrollView(
-//               padding: const EdgeInsets.all(16.0),
-//               child: Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   // Info Card
-//                   Card(
-//                     color: Colors.blue.shade900,
-//                     child: Padding(
-//                       padding: const EdgeInsets.all(16.0),
-//                       child: Column(
-//                         crossAxisAlignment: CrossAxisAlignment.start,
-//                         children: [
-//                           Row(
-//                             children: [
-//                               Icon(Icons.info_outline,
-//                                   color: Colors.blue.shade300),
-//                               const SizedBox(width: 8),
-//                               const Text(
-//                                 'Server Configuration',
-//                                 style: TextStyle(
-//                                   fontSize: 16,
-//                                   fontWeight: FontWeight.bold,
-//                                 ),
-//                               ),
-//                             ],
-//                           ),
-//                           const SizedBox(height: 8),
-//                           Text(
-//                             'Configure the server URLs for version checking and APK downloads.',
-//                             style: TextStyle(color: Colors.grey.shade400),
-//                           ),
-//                         ],
-//                       ),
-//                     ),
-//                   ),
-
-//                   const SizedBox(height: 24),
-
-//                   // Version URL Field
-//                   _buildUrlField(
-//                     controller: _versionUrlController,
-//                     label: 'Version XML URL',
-//                     hint: 'http://192.168.0.169:8080/version.xml',
-//                     icon: Icons.cloud_download,
-//                     helperText: 'URL pointing to the version.xml file',
-//                   ),
-
-//                   const SizedBox(height: 16),
-
-//                   // APK URL Field
-//                   _buildUrlField(
-//                     controller: _apkUrlController,
-//                     label: 'APK Download URL',
-//                     hint: 'http://192.168.0.169:8080/WaulySignage.apk',
-//                     icon: Icons.android,
-//                     helperText: 'Direct download URL for the APK file',
-//                   ),
-
-//                   const SizedBox(height: 32),
-
-//                   // Action Buttons
-//                   Row(
-//                     children: [
-//                       Expanded(
-//                         child: ElevatedButton.icon(
-//                           onPressed: _saveUrls,
-//                           icon: const Icon(Icons.save),
-//                           label: const Text('Save'),
-//                           style: ElevatedButton.styleFrom(
-//                             backgroundColor: Colors.green,
-//                             padding: const EdgeInsets.symmetric(vertical: 12),
-//                           ),
-//                         ),
-//                       ),
-//                       const SizedBox(width: 12),
-//                       Expanded(
-//                         child: ElevatedButton.icon(
-//                           onPressed: _testConnection,
-//                           icon: const Icon(Icons.wifi),
-//                           label: const Text('Test'),
-//                           style: ElevatedButton.styleFrom(
-//                             backgroundColor: Colors.blue,
-//                             padding: const EdgeInsets.symmetric(vertical: 12),
-//                           ),
-//                         ),
-//                       ),
-//                     ],
-//                   ),
-
-//                   const SizedBox(height: 12),
-
-//                   // Reset Button
-//                   SizedBox(
-//                     width: double.infinity,
-//                     child: OutlinedButton.icon(
-//                       onPressed: _resetToDefaults,
-//                       icon: const Icon(Icons.restore),
-//                       label: const Text('Reset to Default URLs'),
-//                       style: OutlinedButton.styleFrom(
-//                         foregroundColor: Colors.red,
-//                         padding: const EdgeInsets.symmetric(vertical: 12),
-//                       ),
-//                     ),
-//                   ),
-
-//                   const SizedBox(height: 32),
-
-//                   // Current Configuration Display
-//                   _buildCurrentConfigCard(),
-//                 ],
-//               ),
-//             ),
-//     );
-//   }
-
-//   Widget _buildUrlField({
-//     required TextEditingController controller,
-//     required String label,
-//     required String hint,
-//     required IconData icon,
-//     required String helperText,
-//   }) {
-//     return Column(
-//       crossAxisAlignment: CrossAxisAlignment.start,
-//       children: [
-//         Text(
-//           label,
-//           style: const TextStyle(
-//             fontWeight: FontWeight.w600,
-//             fontSize: 14,
-//           ),
-//         ),
-//         const SizedBox(height: 8),
-//         TextField(
-//           controller: controller,
-//           style: const TextStyle(fontSize: 14),
-//           decoration: InputDecoration(
-//             prefixIcon: Icon(icon),
-//             hintText: hint,
-//             helperText: helperText,
-//             helperStyle: TextStyle(color: Colors.grey.shade500, fontSize: 12),
-//             border: OutlineInputBorder(
-//               borderRadius: BorderRadius.circular(8),
-//             ),
-//             filled: true,
-//             fillColor: Colors.grey.shade900,
-//           ),
-//           maxLines: null,
-//           keyboardType: TextInputType.url,
-//         ),
-//       ],
-//     );
-//   }
-
-//   Widget _buildCurrentConfigCard() {
-//     return Card(
-//       color: Colors.grey.shade900,
-//       child: Padding(
-//         padding: const EdgeInsets.all(16.0),
-//         child: Column(
-//           crossAxisAlignment: CrossAxisAlignment.start,
-//           children: [
-//             const Text(
-//               'Current Configuration',
-//               style: TextStyle(
-//                 fontSize: 16,
-//                 fontWeight: FontWeight.bold,
-//               ),
-//             ),
-//             const SizedBox(height: 12),
-//             _buildConfigRow('Version URL:', WaulyAppManager.versionUrl),
-//             const Divider(color: Colors.grey),
-//             _buildConfigRow('APK URL:', WaulyAppManager.apkUrl),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-
-//   Widget _buildConfigRow(String label, String value) {
-//     return Column(
-//       crossAxisAlignment: CrossAxisAlignment.start,
-//       children: [
-//         Text(
-//           label,
-//           style: TextStyle(
-//             fontWeight: FontWeight.w600,
-//             color: Colors.grey.shade500,
-//             fontSize: 12,
-//           ),
-//         ),
-//         const SizedBox(height: 4),
-//         Text(
-//           value,
-//           style: const TextStyle(
-//             fontSize: 13,
-//             fontFamily: 'monospace',
-//           ),
-//           maxLines: 2,
-//           overflow: TextOverflow.ellipsis,
-//         ),
-//       ],
-//     );
-//   }
-
-//   @override
-//   void dispose() {
-//     _versionUrlController.dispose();
-//     _apkUrlController.dispose();
-//     super.dispose();
-//   }
-// }
-
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:philips_tv_flutter/services/wauly_app_service.dart';
@@ -367,6 +11,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _ipController = TextEditingController();
+  final TextEditingController _versionUrlController = TextEditingController(); // NEW
   final TextEditingController _apkUrlController = TextEditingController();
   bool _isLoading = false;
 
@@ -409,47 +54,119 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() {
       _ipController.text = _extractIpFromUrl(versionUrl);
+      _versionUrlController.text = versionUrl; // NEW: Display full version URL
       _apkUrlController.text = apkUrl;
       _isLoading = false;
     });
   }
 
   Future<void> _saveUrls() async {
-    final ip = _ipController.text.trim();
-
-    if (ip.isEmpty) {
-      _showSnackBar('Please enter server IP address', isError: true);
-      return;
-    }
-
-    // Validate IP format (basic validation)
-    final ipPattern = RegExp(r'^[\d\.]+:\d+$');
-    if (!ipPattern.hasMatch(ip)) {
-      _showSnackBar('Invalid format. Use: 192.168.0.169:8080', isError: true);
-      return;
-    }
+    final customVersionUrl = _versionUrlController.text.trim();
+    final customApkUrl = _apkUrlController.text.trim();
 
     setState(() => _isLoading = true);
 
     try {
-      final versionUrl = _buildVersionUrl(ip);
-      final apkUrl = _buildApkUrl(ip);
+      final prefs = await SharedPreferences.getInstance();
 
-      await WaulyAppManager.saveCustomUrls(versionUrl, apkUrl);
-      _showSnackBar('Server IP saved successfully!', isError: false);
+      // Use the Azure Blob Storage URL as the default
+      final defaultVersionUrl =
+          'https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml';
+      final defaultApkUrl = ''; // Add your default APK URL here if needed
+
+      // Case 1: Direct URLs provided (for cloud storage like Azure)
+      if (customVersionUrl.isNotEmpty && customApkUrl.isNotEmpty) {
+        await prefs.setString(
+            WaulyAppManager.KEY_CUSTOM_VERSION_URL, customVersionUrl);
+        await prefs.setString(WaulyAppManager.KEY_CUSTOM_APK_URL, customApkUrl);
+
+        _showSnackBar('Custom URLs saved successfully!', isError: false);
+      }
+      // Case 2: Only one URL provided
+      else if (customVersionUrl.isNotEmpty || customApkUrl.isNotEmpty) {
+        if (customVersionUrl.isNotEmpty) {
+          await prefs.setString(
+              WaulyAppManager.KEY_CUSTOM_VERSION_URL, customVersionUrl);
+        } else {
+          // If only APK URL provided, use default version URL
+          await prefs.setString(
+              WaulyAppManager.KEY_CUSTOM_VERSION_URL, defaultVersionUrl);
+        }
+        if (customApkUrl.isNotEmpty) {
+          await prefs.setString(
+              WaulyAppManager.KEY_CUSTOM_APK_URL, customApkUrl);
+        } else {
+          // If only version URL provided, use default APK URL
+          await prefs.setString(
+              WaulyAppManager.KEY_CUSTOM_APK_URL, defaultApkUrl);
+        }
+        _showSnackBar('URLs saved successfully!', isError: false);
+      } else {
+        // Use default Azure URLs
+        await prefs.setString(
+            WaulyAppManager.KEY_CUSTOM_VERSION_URL, defaultVersionUrl);
+        await prefs.setString(
+            WaulyAppManager.KEY_CUSTOM_APK_URL, defaultApkUrl);
+
+        _showSnackBar('Default Azure URLs loaded successfully!',
+            isError: false);
+      }
+
+      // Reload current URLs to reflect changes
+      await _loadCurrentUrls();
 
       // Test connection
       await _testConnection();
     } catch (e) {
-      _showSnackBar('Error saving IP: $e', isError: true);
+      _showSnackBar('Error saving settings: $e', isError: true);
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
+  // Future<void> _testConnection() async {
+  //   try {
+  //     final versionInfo = await WaulyAppManager.fetchLatestVersion();
+  //     if (versionInfo != null) {
+  //       _showSnackBar(
+  //         'Connection successful!\nLatest version: ${versionInfo.version}',
+  //         isError: false,
+  //         duration: const Duration(seconds: 4),
+  //       );
+  //     } else {
+  //       // Check if version URL points to APK instead of XML
+  //       if (WaulyAppManager.versionUrl.toLowerCase().endsWith('.apk')) {
+  //         _showSnackBar(
+  //           '⚠️ Version URL points to APK file, not XML.\n'
+  //           'Create a version.xml file or use separate URLs.\n'
+  //           'APK URL is still valid for downloads.',
+  //           isError: false,
+  //           duration: const Duration(seconds: 5),
+  //         );
+  //       } else {
+  //         _showSnackBar('Could not fetch version info', isError: true);
+  //       }
+  //     }
+  //   } catch (e) {
+  //     if (e.toString().contains('XmlParserException')) {
+  //       _showSnackBar(
+  //         '❌ Version URL must point to XML file (not APK)\n'
+  //         'Current URL: ${WaulyAppManager.versionUrl}',
+  //         isError: true,
+  //         duration: const Duration(seconds: 5),
+  //       );
+  //     } else {
+  //       _showSnackBar('Connection test failed: $e', isError: true);
+  //     }
+  //   }
+  // }
+
+  // In _testConnection() method
   Future<void> _testConnection() async {
     try {
+      // ✅ CORRECT: Use fetchLatestVersion()
       final versionInfo = await WaulyAppManager.fetchLatestVersion();
+
       if (versionInfo != null) {
         _showSnackBar(
           'Connection successful!\nLatest version: ${versionInfo.version}',
@@ -469,10 +186,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
-        title:
-            const Text('Reset Server', style: TextStyle(color: Colors.white)),
+        title: const Text('Reset to Default',
+            style: TextStyle(color: Colors.white)),
         content: const Text(
-          'Reset to default server (192.168.0.169:8080)?',
+          'Reset to default Azure storage URLs?\n\n'
+          'Version URL: https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml',
           style: TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -491,10 +209,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirm == true) {
       setState(() => _isLoading = true);
-      await WaulyAppManager.resetToDefaultUrls();
-      await _loadCurrentUrls();
-      _showSnackBar('Reset to default server', isError: false);
-      setState(() => _isLoading = false);
+      try {
+        final prefs = await SharedPreferences.getInstance();
+
+        // Set to Azure default URLs
+        final defaultVersionUrl =
+            'https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml';
+        final defaultApkUrl = ''; // Add your default APK URL here if needed
+
+        await prefs.setString(
+            WaulyAppManager.KEY_CUSTOM_VERSION_URL, defaultVersionUrl);
+        await prefs.setString(
+            WaulyAppManager.KEY_CUSTOM_APK_URL, defaultApkUrl);
+
+        // Update the static URLs in WaulyAppManager
+        WaulyAppManager.versionUrl = defaultVersionUrl;
+        WaulyAppManager.apkUrl = defaultApkUrl;
+
+        await _loadCurrentUrls();
+        _showSnackBar('Reset to default Azure URLs', isError: false);
+
+        // Test connection with new URLs
+        await _testConnection();
+      } catch (e) {
+        _showSnackBar('Error resetting to defaults: $e', isError: true);
+      } finally {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -510,87 +251,166 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final currentFullUrl = _ipController.text.isNotEmpty
-        ? _buildVersionUrl(_ipController.text)
-        : WaulyAppManager.versionUrl;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFF0D1117),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF161B22),
-        //title: const Text('Server Configuration'),
-        elevation: 0,
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Info Card
-                  Card(
-                    color: Colors.blue.shade900,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.info_outline,
-                                  color: Colors.blue.shade300),
-                              const SizedBox(width: 8),
-                              const Text(
-                                'Server Configuration',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
+Widget build(BuildContext context) {
+  return Scaffold(
+    backgroundColor: const Color(0xFF0D1117),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFF161B22),
+      elevation: 0,
+    ),
+    body: _isLoading
+        ? const Center(child: CircularProgressIndicator())
+        : SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Info Card
+                Card(
+                  color: Colors.blue.shade900,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: Colors.blue.shade300),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Server Configuration',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Enter the server IP address and port. The paths are automatically configured.',
-                            style: TextStyle(color: Colors.grey.shade400),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Option 1: Enter local server IP\n'
+                          'Option 2: Enter direct URLs below (for cloud storage)',
+                          style: TextStyle(color: Colors.grey.shade400),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+
+                const SizedBox(height: 24),
+
+                // Version URL Field (for version.xml)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade900,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.info, size: 16, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Option 2a: Version Info URL (XML)',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // IP Address Field
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Server IP Address',
+                      const SizedBox(height: 8),
+                      Text(
+                        'Must point to a version.xml file containing version info',
                         style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          color: Colors.white,
+                          color: Colors.grey.shade400,
+                          fontSize: 11,
                         ),
                       ),
                       const SizedBox(height: 8),
                       TextField(
-                        controller: _ipController,
-                        style:
-                            const TextStyle(color: Colors.white, fontSize: 16),
+                        controller: _versionUrlController,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                        ),
                         decoration: InputDecoration(
-                          prefixIcon:
-                              const Icon(Icons.dns, color: Colors.greenAccent),
-                          hintText: '192.168.0.169:8080',
+                          hintText: 'https://example.com/version.xml',
                           hintStyle: TextStyle(color: Colors.grey.shade600),
-                          helperText: 'Enter IP address and port only',
-                          helperStyle: TextStyle(
-                              color: Colors.grey.shade500, fontSize: 12),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(color: Colors.grey.shade700),
+                          ),
+                          focusedBorder: const OutlineInputBorder(
+                            borderSide: BorderSide(color: Colors.blue),
+                          ),
+                          filled: true,
+                          fillColor: Colors.black.withOpacity(0.3),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // APK URL Field
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade900,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.android, size: 16, color: Colors.greenAccent),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Option 2b: APK Download URL',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Direct URL to the APK file for download',
+                        style: TextStyle(
+                          color: Colors.grey.shade400,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: _apkUrlController,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'https://example.com/app.apk',
+                          hintStyle: TextStyle(color: Colors.grey.shade600),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderSide: BorderSide(color: Colors.grey.shade700),
@@ -599,151 +419,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             borderSide: BorderSide(color: Colors.greenAccent),
                           ),
                           filled: true,
-                          fillColor: Colors.grey.shade900,
+                          fillColor: Colors.black.withOpacity(0.3),
                         ),
-                        keyboardType: TextInputType.text,
-                        onChanged: (value) {
-                          setState(() {});
-                        },
+                        maxLines: 2,
                       ),
                     ],
                   ),
+                ),
 
-                  const SizedBox(height: 8),
+                const SizedBox(height: 32),
 
-                  // Preview of full URLs
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade900,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade800),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Preview URLs:',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        // Row(
-                        //   children: [
-                        //     const Icon(Icons.cloud_download,
-                        //         size: 14, color: Colors.greenAccent),
-                        //     const SizedBox(width: 8),
-                        //     const Text(
-                        //       'Version:',
-                        //       style:
-                        //           TextStyle(color: Colors.grey, fontSize: 12),
-                        //     ),
-                        //     const SizedBox(width: 8),
-                        //     Expanded(
-                        //       child: Text(
-                        //         currentFullUrl,
-                        //         style: const TextStyle(
-                        //           color: Colors.white70,
-                        //           fontSize: 11,
-                        //           fontFamily: 'monospace',
-                        //         ),
-                        //         maxLines: 1,
-                        //         overflow: TextOverflow.ellipsis,
-                        //       ),
-                        //     ),
-                        //   ],
-                        // ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.android,
-                                size: 14, color: Colors.greenAccent),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'APK:',
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 12),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _ipController.text.isNotEmpty
-                                    ? _buildApkUrl(_ipController.text)
-                                    : WaulyAppManager.apkUrl,
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Action Buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _saveUrls,
-                          icon: const Icon(Icons.save),
-                          label: const Text('Save'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
+                // Action Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _saveUrls,
+                        icon: const Icon(Icons.save),
+                        label: const Text('Save'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _testConnection,
-                          icon: const Icon(Icons.wifi),
-                          label: const Text('Test'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _testConnection,
+                        icon: const Icon(Icons.wifi),
+                        label: const Text('Test'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
+                ),
 
-                  const SizedBox(height: 12),
+                const SizedBox(height: 12),
 
-                  // Reset Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _resetToDefaults,
-                      icon: const Icon(Icons.restore),
-                      label: const Text('Reset to Default Server'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
+                // Reset Button
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _resetToDefaults,
+                    icon: const Icon(Icons.restore),
+                    label: const Text('Reset to Default Server'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 32),
+                const SizedBox(height: 32),
 
-                  // Current Configuration Display
-                  _buildCurrentConfigCard(),
-                ],
-              ),
-            ),
-    );
-  }
+                // Current Configuration Display
+                _buildCurrentConfigCard(),
+              ], 
+            ), 
+          ), 
+    ); 
+}
 
   Widget _buildCurrentConfigCard() {
     final ip = _extractIpFromUrl(WaulyAppManager.versionUrl);
@@ -764,11 +503,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            _buildConfigRow('Server IP:', ip.isNotEmpty ? ip : 'Default'),
+            _buildConfigRow('Server IP:', ip.isNotEmpty ? ip : 'Not set'),
             const Divider(color: Colors.grey),
-            _buildConfigRow('Full Version URL:', WaulyAppManager.versionUrl),
+            _buildConfigRow('Version URL (XML):', WaulyAppManager.versionUrl),
             const Divider(color: Colors.grey),
-            _buildConfigRow('Full APK URL:', WaulyAppManager.apkUrl),
+            _buildConfigRow('APK URL:', WaulyAppManager.apkUrl),
           ],
         ),
       ),
@@ -805,6 +544,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _ipController.dispose();
+    _versionUrlController.dispose();
     _apkUrlController.dispose();
     super.dispose();
   }

@@ -19,6 +19,7 @@ import 'package:http/http.dart' as http;
 import 'dart:math' as math;
 import 'services/wauly_app_service.dart';
 import 'screens/settings_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -98,36 +99,35 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   // Quick IP dialog for temporary changes (only IP input)
   Future<void> _showQuickUrlDialog() async {
-    // Extract current IP from URL
-    String extractIp(String url) {
-      try {
-        final uri = Uri.parse(url);
-        return '${uri.host}:${uri.port}';
-      } catch (e) {
-        return '192.168.0.169:8080';
-      }
-    }
+    // Get current URLs
+    final currentVersionUrl = WaulyAppManager.versionUrl;
+    final currentApkUrl = WaulyAppManager.apkUrl;
 
-    final currentIp = extractIp(WaulyAppManager.versionUrl);
-    final controller = TextEditingController(text: currentIp);
+    final versionController = TextEditingController(text: currentVersionUrl);
+    final apkController = TextEditingController(text: currentApkUrl);
 
-    final ip = await showDialog<String>(
+    final shouldUseAzure = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
         title: const Text(
-          'Enter Server IP',
+          'Configure Update URLs',
           style: TextStyle(color: Colors.white),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const Text(
+              'Version XML URL:',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
             TextField(
-              controller: controller,
+              controller: versionController,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: '192.168.0.169:8080',
+                hintText: 'https://.../version.xml',
                 hintStyle: TextStyle(color: Colors.grey.shade600),
                 border: const OutlineInputBorder(),
                 enabledBorder: OutlineInputBorder(
@@ -136,58 +136,131 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 focusedBorder: const OutlineInputBorder(
                   borderSide: BorderSide(color: Colors.greenAccent),
                 ),
-                prefixIcon: const Icon(Icons.dns, color: Colors.greenAccent),
+                prefixIcon: const Icon(Icons.link, color: Colors.greenAccent),
               ),
-              keyboardType: TextInputType.text,
+              keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'APK Download URL:',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Version URL: http://${controller.text}/version.xml',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 11),
+            TextField(
+              controller: apkController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'https://.../app.apk',
+                hintStyle: TextStyle(color: Colors.grey.shade600),
+                border: const OutlineInputBorder(),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.grey.shade700),
+                ),
+                focusedBorder: const OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.greenAccent),
+                ),
+                prefixIcon:
+                    const Icon(Icons.cloud_download, color: Colors.greenAccent),
+              ),
+              keyboardType: TextInputType.url,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade900.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade700),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.cloud_queue,
+                      color: Colors.blue.shade300, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Azure Default',
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml',
+                          style: TextStyle(
+                              color: Colors.blue.shade300, fontSize: 10),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
-              final ip = controller.text.trim();
-              if (ip.isNotEmpty) {
-                Navigator.pop(context, ip);
+              final versionUrl = versionController.text.trim();
+              final apkUrl = apkController.text.trim();
+
+              if (versionUrl.isNotEmpty && apkUrl.isNotEmpty) {
+                Navigator.pop(context, true);
+              } else {
+                // Show error if URLs are empty
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter both URLs'),
+                    backgroundColor: Colors.red,
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.greenAccent,
               foregroundColor: Colors.black,
             ),
-            child: const Text('Use'),
+            child: const Text('Save'),
           ),
         ],
       ),
     );
 
-    if (ip != null && ip.isNotEmpty) {
-      // Build URLs from IP
-      final versionUrl = 'http://$ip/version.xml';
-      final apkUrl = 'http://$ip/WaulySignage.apk';
+    if (shouldUseAzure == true) {
+      // Build URLs from the text fields
+      final versionUrl = versionController.text.trim();
+      final apkUrl = apkController.text.trim();
 
       // Update URLs
       WaulyAppManager.versionUrl = versionUrl;
       WaulyAppManager.apkUrl = apkUrl;
 
+      // Save to SharedPreferences if needed
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(WaulyAppManager.KEY_CUSTOM_VERSION_URL, versionUrl);
+      await prefs.setString(WaulyAppManager.KEY_CUSTOM_APK_URL, apkUrl);
+
       // Show confirmation
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Using server: $ip'),
+          const SnackBar(
+            content: Text('Custom URLs saved successfully!'),
             backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
+            duration: Duration(seconds: 3),
           ),
         );
       }
+
+      // Test connection
+      await _testConnection();
 
       // Refresh the UI
       setState(() {});

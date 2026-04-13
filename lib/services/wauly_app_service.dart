@@ -22,15 +22,18 @@ class AppVersionInfo {
     required this.version,
     required this.exeUrl,
     required this.fileName,
-    required this.versionCode,
+    required this.versionCode, required String url,
   });
 }
 
 class WaulyAppManager {
   static const platform = MethodChannel('apk_install');
-  static const packageName = 'com.example.wauly_app';
-  static String versionUrl = 'http://192.168.0.105:8080/version.xml';
-  static String apkUrl = 'http://192.168.0.105:8080/WaulySignage.apk';
+   static const packageName = 'com.example.wauly_app';
+  // static String versionUrl = 'http://192.168.0.105:8080/version.xml';
+  // static String apkUrl = 'http://192.168.0.105:8080/WaulySignage.apk';
+  static String versionUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml";
+  static String apkUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk";
+
   static const String KEY_LAST_INSTALLED_VERSION = 'last_installed_version';
 
   // ADD THESE - Pending state keys
@@ -38,7 +41,7 @@ class WaulyAppManager {
   static const String KEY_PENDING_APK_PATH = 'pending_apk_path';
   static const String KEY_PENDING_VERSION = 'pending_version';
 
-    // ADD THESE CONSTANTS
+  // ADD THESE CONSTANTS
   static const String KEY_CUSTOM_VERSION_URL = 'custom_version_url';
   static const String KEY_CUSTOM_APK_URL = 'custom_apk_url';
 
@@ -81,8 +84,8 @@ class WaulyAppManager {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('last_installed_version');
   }
-  
-    // 🔹 ADD THESE NEW METHODS
+
+  // 🔹 ADD THESE NEW METHODS
 
   // Load saved URLs from SharedPreferences
   static Future<void> loadSavedUrls() async {
@@ -101,7 +104,7 @@ class WaulyAppManager {
     }
   }
 
-    // Save custom URLs
+  // Save custom URLs
   static Future<void> saveCustomUrls(
       String newVersionUrl, String newApkUrl) async {
     final prefs = await SharedPreferences.getInstance();
@@ -120,54 +123,108 @@ class WaulyAppManager {
     await prefs.remove(KEY_CUSTOM_VERSION_URL);
     await prefs.remove(KEY_CUSTOM_APK_URL);
 
-    versionUrl = 'http://192.168.0.169:8080/version.xml';
-    apkUrl = 'http://192.168.0.169:8080/WaulySignage.apk';
+
+   versionUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml";
+   apkUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk";
+
+    // versionUrl = 'http://192.168.0.169:8080/version.xml';
+    // apkUrl = 'http://192.168.0.169:8080/WaulySignage.apk';
 
     print('🔄 Reset to default URLs');
-  }  
-
-
+  }
+  
+  // In wauly_app_service.dart
   static Future<AppVersionInfo?> fetchLatestVersion() async {
     try {
-      print('📡 Fetching version from: $versionUrl');
-      final response = await http.get(Uri.parse(versionUrl));
+      final url = versionUrl;
+      print('📡 Fetching version from: $url');
 
-      if (response.statusCode == 200) {
-        final document = XmlDocument.parse(response.body);
-        final update = document.findAllElements('Update').first;
-
-        int versionCode = 0;
-        try {
-          final versionCodeElement =
-              update.findElements('VersionCode').firstOrNull;
-          if (versionCodeElement != null) {
-            versionCode = int.parse(versionCodeElement.text);
-            print('📦 VersionCode found: $versionCode');
-          } else {
-            print('⚠️ VersionCode not in XML, using default: 0');
-          }
-        } catch (e) {
-          print('⚠️ Error parsing VersionCode: $e, using default: 0');
+      // Check if URL points to APK file
+      if (url.toLowerCase().endsWith('.apk')) {
+        print('⚠️ Direct APK URL detected - skipping XML parsing');
+        // Extract version from filename or use default
+        String version = '1.0.0';
+        // Try to extract version from filename (e.g., WaulySignage_v1.0.1.apk)
+        final fileName = url.split('/').last;
+        final versionMatch = RegExp(r'v(\d+\.\d+\.\d+)').firstMatch(fileName);
+        if (versionMatch != null) {
+          version = versionMatch.group(1)!;
         }
 
-        final versionInfo = AppVersionInfo(
-          version: update.findElements('Version').first.text,
-          exeUrl: update.findElements('ExeUrl').first.text,
-          fileName: update.findElements('FileName').first.text,
-          versionCode: versionCode,
-        );
+        int versionCode = 0;
 
-        print(
-            '📦 Latest version from server: ${versionInfo.version} (code: ${versionInfo.versionCode})');
-        return versionInfo;
-      } else {
-        print('❌ HTTP Error: ${response.statusCode}');
+        // ✅ FIXED: Use constructor AppVersionInfo() instead of versionInfo()
+        return AppVersionInfo(
+          versionCode: 1,
+          version: version,
+          url: url, exeUrl: '', fileName: '',
+        );
       }
+
+      // Otherwise parse as XML
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final document = XmlDocument.parse(response.body);
+        final versionElement = document.findAllElements('version').first;
+        final code = int.parse(versionElement.findElements('code').first.text);
+        final name = versionElement.findElements('name').first.text;
+        final apkUrl = versionElement.findElements('url').first.text;
+
+        // ✅ FIXED: Use constructor AppVersionInfo() instead of versionInfo()
+        return AppVersionInfo(
+          versionCode: code,
+          version: name,
+          url: apkUrl, exeUrl: '', fileName: '',
+        );
+      }
+      return null;
     } catch (e) {
       print('❌ Error fetching version: $e');
+      return null;
     }
-    return null;
   }
+  
+  // static Future<AppVersionInfo?> fetchLatestVersion() async {
+  //   try {
+  //     print('📡 Fetching version from: $versionUrl');
+  //     final response = await http.get(Uri.parse(versionUrl));
+
+  //     if (response.statusCode == 200) {
+  //       final document = XmlDocument.parse(response.body);
+  //       final update = document.findAllElements('Update').first;
+
+  //       int versionCode = 0;
+  //       try {
+  //         final versionCodeElement =
+  //             update.findElements('VersionCode').firstOrNull;
+  //         if (versionCodeElement != null) {
+  //           versionCode = int.parse(versionCodeElement.text);
+  //           print('📦 VersionCode found: $versionCode');
+  //         } else {
+  //           print('⚠️ VersionCode not in XML, using default: 0');
+  //         }
+  //       } catch (e) {
+  //         print('⚠️ Error parsing VersionCode: $e, using default: 0');
+  //       }
+
+  //       final versionInfo = AppVersionInfo(
+  //         version: update.findElements('Version').first.text,
+  //         exeUrl: update.findElements('ExeUrl').first.text,
+  //         fileName: update.findElements('FileName').first.text,
+  //         versionCode: versionCode,
+  //       );
+
+  //       print(
+  //           '📦 Latest version from server: ${versionInfo.version} (code: ${versionInfo.versionCode})');
+  //       return versionInfo;
+  //     } else {
+  //       print('❌ HTTP Error: ${response.statusCode}');
+  //     }
+  //   } catch (e) {
+  //     print('❌ Error fetching version: $e');
+  //   }
+  //   return null;
+  // }
 
   // 🔹 VERSION COMPARE
   static bool isNewerVersion(String current, String latest) {
@@ -390,8 +447,10 @@ class WaulyAppManager {
       if (installedVersion != null) {
         await openApp();
       } else {
-        await downloadAndInstall(
-            'http://192.168.0.169:8080/WaulySignage.apk', 'wauly.apk',
+        // Use Azure default URL when no version info is available
+        final defaultApkUrl =
+            'https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk';
+        await downloadAndInstall(defaultApkUrl, 'wauly.apk',
             exitAfterInstall: true, newVersion: '', context: context);
       }
       return;
