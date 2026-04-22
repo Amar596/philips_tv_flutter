@@ -19,6 +19,8 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import android.provider.Settings
 import android.content.pm.PackageManager
+import android.content.BroadcastReceiver
+
 
 class MainActivity : FlutterActivity() {
 
@@ -28,11 +30,18 @@ class MainActivity : FlutterActivity() {
         const val APK_CHANNEL = "apk_install"
         private const val TAG = "WatchdogMainActivity"
         const val AUTO_INSTALL_CHANNEL = "auto_install"
+        const val REMOTE_KEY_CHANNEL = "remote_key_channel"
     }
 
     private lateinit var receiver: WaulyEventReceiver
     private var eventSink: EventChannel.EventSink? = null
     private var eventChannel: EventChannel? = null
+    private var remoteKeyChannel: MethodChannel? = null
+
+    // Track last key press to avoid duplicates
+    private var lastKeyCode: Int = -1
+    private var lastKeyTime: Long = 0
+    private val KEY_DEBOUNCE_MS = 100L
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,102 +66,161 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // Register all plugins
-        GeneratedPluginRegistrant.registerWith(flutterEngine)
+            // Register all plugins
+            GeneratedPluginRegistrant.registerWith(flutterEngine)
 
-        // Set up EventChannel
-        eventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
-        eventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
-                Log.d(TAG, "✅ Flutter onListen CALLED")
-                eventSink = sink
-                
-                WaulyEventReceiver.onEventReceived = { message ->
-                    Handler(Looper.getMainLooper()).post {
-                        Log.d(TAG, "Pushing to Flutter: $message")
-                        sink.success(message)
+            // Set up EventChannel
+            eventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
+            eventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
+                    Log.d(TAG, "✅ Flutter onListen CALLED")
+                    eventSink = sink
+                    
+                    WaulyEventReceiver.onEventReceived = { message ->
+                        Handler(Looper.getMainLooper()).post {
+                            Log.d(TAG, "Pushing to Flutter: $message")
+                            sink.success(message)
+                        }
                     }
                 }
-            }
 
-            override fun onCancel(arguments: Any?) {
-                Log.d(TAG, "Flutter onCancel called")
-                eventSink = null
-                WaulyEventReceiver.onEventReceived = null
-            }
-        })
-
-        // Method channel for testing
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
-            .setMethodCallHandler { call, result ->
-                if (call.method == "sendTestBroadcast") {
-                    sendTestBroadcast()
-                    result.success("Test broadcast sent")
-                } else {
-                    result.notImplemented()
+                override fun onCancel(arguments: Any?) {
+                    Log.d(TAG, "Flutter onCancel called")
+                    eventSink = null
+                    WaulyEventReceiver.onEventReceived = null
                 }
-            }
+            })
+
+            // Method channel for testing
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
+                .setMethodCallHandler { call, result ->
+                    if (call.method == "sendTestBroadcast") {
+                        sendTestBroadcast()
+                        result.success("Test broadcast sent")
+                    } else {
+                        result.notImplemented()
+                    }
+                }
 
 
-        // APK MethodChannel for installation operations
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_CHANNEL)
-            .setMethodCallHandler { call, result ->
+            // APK MethodChannel for installation operations
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_CHANNEL)
+                .setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "installApk" -> {
+                            val path = call.argument<String>("path")
+                            if (path != null) {
+                                installApk(path)
+                                result.success(true)
+                            } else {
+                                result.error("ERROR", "Path is null", null)
+                            }
+                        }
+                        "getPackageVersion" -> {
+                            val packageName = call.argument<String>("packageName")
+                            if (packageName != null) {
+                                val version = getPackageVersion(packageName)
+                                Log.d(TAG, "Returning version: $version for package: $packageName")
+                                result.success(version)
+                            } else {
+                                result.error("ERROR", "Package name is null", null)
+                            }
+                        }
+                        "getPackageVersionCode" -> {
+                            val packageName = call.argument<String>("packageName")
+                            if (packageName != null) {
+                                val versionCode = getPackageVersionCode(packageName)
+                                result.success(versionCode)
+                            } else {
+                                result.error("ERROR", "Package name is null", null)
+                            }
+                        }
+                        else -> result.notImplemented()
+                    }
+                }
+
+            // ADD THIS: Auto-Install MethodChannel for accessibility features
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUTO_INSTALL_CHANNEL)
+                .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "installApk" -> {
-                        val path = call.argument<String>("path")
-                        if (path != null) {
-                            installApk(path)
-                            result.success(true)
-                        } else {
-                            result.error("ERROR", "Path is null", null)
-                        }
+                    "autoClickInstall" -> {
+                        AutoInstallService.autoClickInstall()
+                        result.success(true)
                     }
-                    "getPackageVersion" -> {
-                        val packageName = call.argument<String>("packageName")
-                        if (packageName != null) {
-                            val version = getPackageVersion(packageName)
-                            Log.d(TAG, "Returning version: $version for package: $packageName")
-                            result.success(version)
-                        } else {
-                            result.error("ERROR", "Package name is null", null)
-                        }
+                    "isAccessibilityEnabled" -> {
+                        val enabled = isAccessibilityServiceEnabled()
+                        result.success(enabled)
                     }
-                    "getPackageVersionCode" -> {
-                        val packageName = call.argument<String>("packageName")
-                        if (packageName != null) {
-                            val versionCode = getPackageVersionCode(packageName)
-                            result.success(versionCode)
-                        } else {
-                            result.error("ERROR", "Package name is null", null)
-                        }
+                    "requestAccessibility" -> {
+                        openAccessibilitySettings()
+                        result.success(true)
+                    }
+                    "resetFlags" -> {
+                        AutoInstallService.resetFlags()
+                        result.success(true)
+                    }
+                    "autoClickUpdateButton" -> {
+                        val buttonText = call.argument<String>("buttonText")
+                        AutoInstallService.autoClickUpdateButton(buttonText ?: "Update Now")
+                        result.success(true)
+                    }
+                    "isUpdateDialogShowing" -> {
+                        val isShowing = AutoInstallService.checkForUpdateDialog()
+                        result.success(isShowing)
+                    }
+                    "forceCheckForDialog" -> {
+                       AutoInstallService.instance?.forceCheckForDialog()
+                       result.success(true)
                     }
                     else -> result.notImplemented()
                 }
             }
 
-        // ADD THIS: Auto-Install MethodChannel for accessibility features
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUTO_INSTALL_CHANNEL)
-            .setMethodCallHandler { call, result ->
-        when (call.method) {
-            "autoClickInstall" -> {
-                AutoInstallService.autoClickInstall()
-                result.success(true)
-            }
-            "isAccessibilityEnabled" -> {
-                val enabled = isAccessibilityServiceEnabled()
-                result.success(enabled)
-            }
-            "requestAccessibility" -> {
-                openAccessibilitySettings()
-                result.success(true)
-            }
-            "resetFlags" -> {
-                AutoInstallService.resetFlags()
-                result.success(true)
-            }
-            else -> result.notImplemented()
-        }
-        }
+            // Add Remote Key Channel
+            remoteKeyChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, REMOTE_KEY_CHANNEL)
+                
+            // In MainActivity.kt
+
+            // fun dispatchKeyEvent(event: KeyEvent?): Boolean {
+            //     event?.let {
+            //         // Only process ACTION_DOWN events to avoid duplicates
+            //         if (it.action == KeyEvent.ACTION_DOWN) {
+            //             val keyCode = it.keyCode
+                        
+            //             // Convert keyCode to readable character
+            //             val keyChar = when (keyCode) {
+            //                 KeyEvent.KEYCODE_0 -> "0"
+            //                 KeyEvent.KEYCODE_1 -> "1"
+            //                 KeyEvent.KEYCODE_2 -> "2"
+            //                 KeyEvent.KEYCODE_3 -> "3"
+            //                 KeyEvent.KEYCODE_4 -> "4"
+            //                 KeyEvent.KEYCODE_5 -> "5"
+            //                 KeyEvent.KEYCODE_6 -> "6"
+            //                 KeyEvent.KEYCODE_7 -> "7"
+            //                 KeyEvent.KEYCODE_8 -> "8"
+            //                 KeyEvent.KEYCODE_9 -> "9"
+            //                 else -> null
+            //             }
+                        
+            //             if (keyChar != null) {
+            //                 Log.d(TAG, "🎮 Key pressed: $keyChar (code=$keyCode)")
+                            
+            //                 // Send to Flutter
+            //                 try {
+            //                     remoteKeyChannel?.invokeMethod("onKeyPressed", mapOf(
+            //                         "keyCode" to keyCode,
+            //                         "keyChar" to keyChar,
+            //                         "action" to "down"
+            //                     ))
+            //                 } catch (e: Exception) {
+            //                     Log.e(TAG, "Failed to send key event to Flutter: ${e.message}")
+            //                 }
+            //             }
+            //         }
+            //     }
+                
+            //     return super.dispatchKeyEvent(event)
+            // }
     }
 
     private fun forceEnableAccessibility() {
@@ -331,8 +399,49 @@ class MainActivity : FlutterActivity() {
         Log.d(TAG, "onStart called - flutterEngine attached: ${flutterEngine != null}")
     }
 
+
+    private val webViewClickReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+        if (intent?.action == "CLICK_UPDATE_BUTTON") {
+            Log.d(TAG, "Received broadcast to click update button in WebView")
+            clickUpdateButtonInWebView()
+        }
+    }
+    }
+
     override fun onResume() {
-        super.onResume()
-        Log.d(TAG, "onResume called - checking eventChannel: $eventChannel")
+    super.onResume()
+    registerReceiver(webViewClickReceiver, IntentFilter("CLICK_UPDATE_BUTTON"))
+    checkPendingInstallation()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        try {
+            unregisterReceiver(webViewClickReceiver)
+        } catch (e: Exception) {
+            // Ignore
+        }
+    }
+
+    private fun clickUpdateButtonInWebView() {
+    // Get the WebView from your Flutter view and execute JavaScript
+    // You need to get a reference to your WebView widget
+    // This depends on how you're displaying the HTML content
+    
+    // If using WebView widget, you can do:
+    flutterEngine?.dartExecutor?.let {
+        MethodChannel(it.binaryMessenger, "webview_channel")
+            .invokeMethod("clickUpdateButton", null)
+    }
+    }   
+    
+    private fun checkPendingInstallation() {
+    // Call Flutter to check and continue pending installation
+    // You can use MethodChannel to communicate with Flutter
+    if (AutoInstallService.instance != null) {
+        // Accessibility is enabled, continue installation
+        AutoInstallService.autoClickInstall()
+    }
     }
 }

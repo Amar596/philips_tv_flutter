@@ -5,6 +5,7 @@ import 'package:philips_tv_flutter/widgets/brightness_controller.dart';
 import 'package:philips_tv_flutter/widgets/device_details.dart';
 import 'package:philips_tv_flutter/widgets/screen_capture.dart';
 import 'package:philips_tv_flutter/widgets/screen_rotation.dart';
+import 'package:philips_tv_flutter/widgets/terminal_overlay.dart';
 import 'package:philips_tv_flutter/widgets/volume_controller.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'screens/watchdog_screen.dart';
@@ -20,6 +21,8 @@ import 'dart:math' as math;
 import 'services/wauly_app_service.dart';
 import 'screens/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/remote_key_service.dart'; 
+import 'widgets/key_feedback_overlay.dart'; 
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -35,12 +38,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _isChecking = false;
   String _statusMessage = '';
   String _statusDetails = '';
+
+  OverlayEntry? _terminalOverlay;
  
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
       _checkAppUpdate();
+
+          // Set up 777 callback for terminal
+    RemoteKeyService.on777Detected = () {
+      print('🎉 777 detected in HomePage - showing terminal');
+      _showTerminalOverlay();
+    };
+  
   }
 
   @override
@@ -57,6 +69,58 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _statusMessage = message ?? '';
       _statusDetails = details ?? '';
     });
+  }
+
+  // Show terminal overlay
+  void _showTerminalOverlay() {
+    // Remove existing overlay if any
+    _removeTerminalOverlay();
+
+    // Show visual feedback
+    KeyFeedbackOverlay.showKeyPressed('777 ✓');
+
+    _terminalOverlay = OverlayEntry(
+      builder: (context) => Material(
+        color: Colors.transparent,
+        child: Stack(
+          children: [
+            // Semi-transparent background
+            GestureDetector(
+              onTap: _removeTerminalOverlay,
+              child: Container(
+                color: Colors.black.withOpacity(0.3),
+              ),
+            ),
+            // Terminal overlay
+            Center(
+              child: Container(
+                margin: const EdgeInsets.all(20),
+                width: MediaQuery.of(context).size.width * 0.9,
+                height: MediaQuery.of(context).size.height * 0.85,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.5),
+                      blurRadius: 10,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: const TerminalOverlay(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_terminalOverlay!);
+  }
+
+  void _removeTerminalOverlay() {
+    _terminalOverlay?.remove();
+    _terminalOverlay = null;
   }
 
   Future<void> _checkAppUpdate() async {
@@ -396,6 +460,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
   
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -414,6 +479,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           //   onPressed: _showServerInfo,
           //   tooltip: 'Server Configuration',
           // ),
+          IconButton(
+            icon: const Icon(Icons.terminal, color: Colors.greenAccent),
+            onPressed: () {
+              KeyFeedbackOverlay.showKeyPressed('Manual Trigger');
+              RemoteKeyService.manualTrigger();
+            },
+            tooltip: 'Open Terminal (Press 777 on remote)',
+          ),
           //Settings button
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white70),
@@ -441,46 +514,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
               const SizedBox(height: 10),
-
-                            // Server URL indicator
-              // Container(
-              //   margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              //   padding:
-              //       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              //   decoration: BoxDecoration(
-              //     color: const Color(0xFF161B22),
-              //     borderRadius: BorderRadius.circular(8),
-              //     border: Border.all(color: Colors.grey.shade800),
-              //   ),
-              //   child: Row(
-              //     mainAxisSize: MainAxisSize.min,
-              //     children: [
-              //       Icon(Icons.link,
-              //           size: 14, color: Colors.greenAccent.shade400),
-              //       const SizedBox(width: 8),
-              //       Flexible(
-              //         child: Text(
-              //           WaulyAppManager.versionUrl,
-              //           style: const TextStyle(
-              //             color: Colors.white70,
-              //             fontSize: 11,
-              //             fontFamily: 'monospace',
-              //           ),
-              //           overflow: TextOverflow.ellipsis,
-              //         ),
-              //       ),
-              //       const SizedBox(width: 8),
-              //       InkWell(
-              //         onTap: _showQuickUrlDialog,
-              //         child: Icon(
-              //           Icons.edit,
-              //           size: 14,
-              //           color: Colors.blue.shade300,
-              //         ),
-              //       ),
-              //     ],
-              //   ),
-              // ),
 
               // Status Overlay (shown during updates/checks)
               if (_isChecking)

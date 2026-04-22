@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,22 +18,107 @@ class AppVersionInfo {
   final String exeUrl;
   final String fileName;
   final int versionCode;
+  final String url;
 
   AppVersionInfo({
     required this.version,
     required this.exeUrl,
     required this.fileName,
-    required this.versionCode, required String url,
+    required this.versionCode,
+    required this.url,
   });
 }
 
+// Add this class before WaulyAppManager class
+  class AutoClickableAlertDialog extends StatefulWidget {
+    final String title;
+    final String content;
+    final String currentVersion;
+    final String latestVersion;
+    final VoidCallback onUpdateNow;
+    final VoidCallback onLater;
+
+    const AutoClickableAlertDialog({
+      Key? key,
+      required this.title,
+      required this.content,
+      required this.currentVersion,
+      required this.latestVersion,
+      required this.onUpdateNow,
+      required this.onLater,
+    }) : super(key: key);
+
+    @override
+    State<AutoClickableAlertDialog> createState() =>
+        _AutoClickableAlertDialogState();
+  }
+
+   class _AutoClickableAlertDialogState extends State<AutoClickableAlertDialog> {
+  final GlobalKey _updateButtonKey = GlobalKey();
+  bool _autoClicked = false;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Auto-click after dialog is built
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_autoClicked) {
+        _autoClickUpdateButton();
+      }
+    });
+  }
+
+    Future<void> _autoClickUpdateButton() async {
+    // Small delay to ensure dialog is fully rendered
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    // Find the button by key and click it
+    final RenderBox? renderBox = _updateButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      print('🤖 Auto-clicking Update Now button');
+      widget.onUpdateNow();
+      _autoClicked = true;
+    } else {
+      print('❌ Could not find Update Now button for auto-click');
+    }
+  }
+  
+      @override
+    Widget build(BuildContext context) {
+      return AlertDialog(
+        title: Text(widget.title),
+        content: Text(widget.content),
+        actions: [
+          TextButton(
+            onPressed: () {
+              widget.onLater();
+              Navigator.pop(context, false);
+            },
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            key: _updateButtonKey, // Add key to identify the button
+            onPressed: () {
+              widget.onUpdateNow();
+              Navigator.pop(context, true);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+            child: const Text('Update Now'),
+          ),
+        ],
+      );
+    }
+  }
+  
+
 class WaulyAppManager {
   static const platform = MethodChannel('apk_install');
-   static const packageName = 'com.example.wauly_app';
-  // static String versionUrl = 'http://192.168.0.105:8080/version.xml';
-  // static String apkUrl = 'http://192.168.0.105:8080/WaulySignage.apk';
-  static String versionUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml";
-  static String apkUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk";
+  static const packageName = 'com.example.wauly_app';
+  static String versionUrl =
+      "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml";
+  static String apkUrl =
+      "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk";
 
   static const String KEY_LAST_INSTALLED_VERSION = 'last_installed_version';
 
@@ -123,17 +209,14 @@ class WaulyAppManager {
     await prefs.remove(KEY_CUSTOM_VERSION_URL);
     await prefs.remove(KEY_CUSTOM_APK_URL);
 
-
-   versionUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml";
-   apkUrl = "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk";
-
-    // versionUrl = 'http://192.168.0.169:8080/version.xml';
-    // apkUrl = 'http://192.168.0.169:8080/WaulySignage.apk';
+    versionUrl =
+        "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/version.xml";
+    apkUrl =
+        "https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk";
 
     print('🔄 Reset to default URLs');
   }
-  
-  // In wauly_app_service.dart
+
   static Future<AppVersionInfo?> fetchLatestVersion() async {
     try {
       final url = versionUrl;
@@ -142,89 +225,113 @@ class WaulyAppManager {
       // Check if URL points to APK file
       if (url.toLowerCase().endsWith('.apk')) {
         print('⚠️ Direct APK URL detected - skipping XML parsing');
-        // Extract version from filename or use default
         String version = '1.0.0';
-        // Try to extract version from filename (e.g., WaulySignage_v1.0.1.apk)
         final fileName = url.split('/').last;
         final versionMatch = RegExp(r'v(\d+\.\d+\.\d+)').firstMatch(fileName);
         if (versionMatch != null) {
           version = versionMatch.group(1)!;
         }
 
-        int versionCode = 0;
-
-        // ✅ FIXED: Use constructor AppVersionInfo() instead of versionInfo()
         return AppVersionInfo(
           versionCode: 1,
           version: version,
-          url: url, exeUrl: '', fileName: '',
+          url: url,
+          exeUrl: url,
+          fileName: fileName,
         );
       }
 
-      // Otherwise parse as XML
+      // Parse XML
       final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        final document = XmlDocument.parse(response.body);
-        final versionElement = document.findAllElements('version').first;
-        final code = int.parse(versionElement.findElements('code').first.text);
-        final name = versionElement.findElements('name').first.text;
-        final apkUrl = versionElement.findElements('url').first.text;
+      print('📡 Response status: ${response.statusCode}');
 
-        // ✅ FIXED: Use constructor AppVersionInfo() instead of versionInfo()
-        return AppVersionInfo(
-          versionCode: code,
-          version: name,
-          url: apkUrl, exeUrl: '', fileName: '',
-        );
+      if (response.statusCode != 200) {
+        print('❌ HTTP Error: ${response.statusCode}');
+        return null;
       }
-      return null;
+
+      final body = response.body;
+      print('📄 XML Content: $body');
+
+      // Check if XML is empty or invalid
+      if (body.isEmpty || !body.contains('<Update>')) {
+        print('❌ XML file is empty or invalid');
+        return null;
+      }
+
+      final document = XmlDocument.parse(body);
+
+      // Find the Update element
+      final updateElements = document.findAllElements('Update');
+      if (updateElements.isEmpty) {
+        print('❌ No <Update> element found in XML');
+        return null;
+      }
+
+      final updateElement = updateElements.first;
+
+      // Get Version - YOUR XML USES <Version> not <code> or <name>
+      final versionElements = updateElement.findElements('Version');
+      if (versionElements.isEmpty) {
+        print('❌ No <Version> element found');
+        return null;
+      }
+      final version = versionElements.first.text.trim();
+
+      // Get ExeUrl - YOUR XML USES <ExeUrl> not <url>
+      final exeUrlElements = updateElement.findElements('ExeUrl');
+      if (exeUrlElements.isEmpty) {
+        print('❌ No <ExeUrl> element found');
+        return null;
+      }
+      final exeUrl = exeUrlElements.first.text.trim();
+
+      // Get FileName - YOUR XML USES <FileName>
+      final fileNameElements = updateElement.findElements('FileName');
+      String fileName = 'wauly_app.apk';
+      if (fileNameElements.isNotEmpty) {
+        fileName = fileNameElements.first.text.trim();
+      } else {
+        // Fallback: extract from URL
+        fileName = exeUrl.split('/').last;
+      }
+
+      // Parse version code (convert version string to integer code)
+      // Example: "1.0.3" -> 103
+      int versionCode = 1;
+      try {
+        final versionParts = version.split('.');
+        if (versionParts.length >= 3) {
+          versionCode = int.parse(versionParts[0]) * 100 +
+              int.parse(versionParts[1]) * 10 +
+              int.parse(versionParts[2]);
+        } else if (versionParts.length == 2) {
+          versionCode = int.parse(versionParts[0]) * 100 +
+              int.parse(versionParts[1]) * 10;
+        } else {
+          versionCode = int.parse(versionParts[0]) * 100;
+        }
+      } catch (e) {
+        print('⚠️ Could not parse version code, using default: 1');
+        versionCode = 1;
+      }
+
+      print(
+          '✅ Parsed - Version: $version, VersionCode: $versionCode, ExeUrl: $exeUrl, FileName: $fileName');
+
+      return AppVersionInfo(
+        versionCode: versionCode,
+        version: version,
+        url: exeUrl,
+        exeUrl: exeUrl,
+        fileName: fileName,
+      );
     } catch (e) {
       print('❌ Error fetching version: $e');
+      print('Stack trace: ${StackTrace.current}');
       return null;
     }
-  }
-  
-  // static Future<AppVersionInfo?> fetchLatestVersion() async {
-  //   try {
-  //     print('📡 Fetching version from: $versionUrl');
-  //     final response = await http.get(Uri.parse(versionUrl));
-
-  //     if (response.statusCode == 200) {
-  //       final document = XmlDocument.parse(response.body);
-  //       final update = document.findAllElements('Update').first;
-
-  //       int versionCode = 0;
-  //       try {
-  //         final versionCodeElement =
-  //             update.findElements('VersionCode').firstOrNull;
-  //         if (versionCodeElement != null) {
-  //           versionCode = int.parse(versionCodeElement.text);
-  //           print('📦 VersionCode found: $versionCode');
-  //         } else {
-  //           print('⚠️ VersionCode not in XML, using default: 0');
-  //         }
-  //       } catch (e) {
-  //         print('⚠️ Error parsing VersionCode: $e, using default: 0');
-  //       }
-
-  //       final versionInfo = AppVersionInfo(
-  //         version: update.findElements('Version').first.text,
-  //         exeUrl: update.findElements('ExeUrl').first.text,
-  //         fileName: update.findElements('FileName').first.text,
-  //         versionCode: versionCode,
-  //       );
-
-  //       print(
-  //           '📦 Latest version from server: ${versionInfo.version} (code: ${versionInfo.versionCode})');
-  //       return versionInfo;
-  //     } else {
-  //       print('❌ HTTP Error: ${response.statusCode}');
-  //     }
-  //   } catch (e) {
-  //     print('❌ Error fetching version: $e');
-  //   }
-  //   return null;
-  // }
+  } 
 
   // 🔹 VERSION COMPARE
   static bool isNewerVersion(String current, String latest) {
@@ -343,72 +450,113 @@ class WaulyAppManager {
     }
   }
 
+  // Add this new method before downloadAndInstall
+  static Future<bool> _showInstallConfirmationDialog(
+      BuildContext context, String version) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => AlertDialog(
+            title: const Text('Confirm Update'),
+            content: Text(
+              'A new version ($version) is available.\n\n'
+              'Would you like to download and install it now?\n\n'
+              'The app will restart after installation.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                ),
+                child: const Text('Install Now'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  } 
+
   // 🔹 MODIFIED DOWNLOAD AND INSTALL WITH PENDING STATE
-  static Future<void> downloadAndInstall(String url, String fileName,
-      {bool exitAfterInstall = true,
-      String? newVersion,
-      BuildContext? context}) async {
-    print('🚀 Starting download and install process...');
+    static Future<void> downloadAndInstall(String url, String fileName,
+        {bool exitAfterInstall = true,
+        String? newVersion,
+        BuildContext? context,
+        bool showDialog = true}) async {
+      print('🚀 Starting download and install process...');
 
-    await AutoInstallHelper.resetAutoClickFlags();
+        // If showDialog is true, show confirmation dialog first
+    // if (showDialog && context != null) {
+    //   final confirmed =
+    //       await _showInstallConfirmationDialog(context, newVersion ?? '');
+    //   if (!confirmed) {
+    //     print('❌ User cancelled installation');
+    //     return;
+    //   }
+    // }
+     await AutoInstallHelper.resetAutoClickFlags();
 
-    if (await Permission.requestInstallPackages.isDenied) {
-      final status = await Permission.requestInstallPackages.request();
-      if (!status.isGranted) throw Exception('Permission denied');
-    }
+      if (await Permission.requestInstallPackages.isDenied) {
+        final status = await Permission.requestInstallPackages.request();
+        if (!status.isGranted) throw Exception('Permission denied');
+      }
 
-    if (await Permission.storage.isDenied) {
-      final status = await Permission.storage.request();
-      if (!status.isGranted) throw Exception('Storage permission denied');
-    }
+      if (await Permission.storage.isDenied) {
+        final status = await Permission.storage.request();
+        if (!status.isGranted) throw Exception('Storage permission denied');
+      }
 
-    final path = await downloadApk(url, fileName);
+      final path = await downloadApk(url, fileName);
 
-    // Check if accessibility is enabled
-    final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
+      // Check if accessibility is enabled
+      final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
 
-    if (!isEnabled) {
-      print('❌ Accessibility not enabled, saving pending state');
+      if (!isEnabled) {
+        print('❌ Accessibility not enabled, saving pending state');
 
-      // Save pending installation
-      await savePendingInstallation(path, newVersion ?? '');
+        // Save pending installation
+        await savePendingInstallation(path, newVersion ?? '');
 
-      // Show dialog and request accessibility
-      if (context != null) {
-        final enable = await _showAccessibilityDialog(context);
-        if (enable) {
-          await openAccessibilitySettings();
-          // App will close here, but state is saved
-          // User must reopen the app manually
-          return;
+        // Show dialog and request accessibility
+        if (context != null) {
+          final enable = await _showAccessibilityDialog(context);
+          if (enable) {
+            await openAccessibilitySettings();
+            // App will close here, but state is saved
+            // User must reopen the app manually
+            return;
+          } else {
+            await clearPendingInstallation();
+            throw Exception('Accessibility permission required');
+          }
         } else {
-          await clearPendingInstallation();
-          throw Exception('Accessibility permission required');
+          throw Exception(
+              'Accessibility permission required and no context provided');
         }
-      } else {
-        throw Exception(
-            'Accessibility permission required and no context provided');
+      }
+
+      // Accessibility is enabled, proceed with installation
+      print('🔧 Attempting auto-install...');
+      await AutoInstallHelper.triggerAutoInstall(path);
+      print('✅ APK installation initiated');
+
+      if (newVersion != null) {
+        await markUpdateInstalled(newVersion);
+      }
+
+      await cleanupOldApks(path);
+      await clearPendingInstallation();
+
+      if (exitAfterInstall) {
+        print('🚪 Exiting app after installation...');
+        await Future.delayed(const Duration(seconds: 2));
+        SystemChannels.platform.invokeMethod('SystemNavigator.pop');
       }
     }
-
-    // Accessibility is enabled, proceed with installation
-    print('🔧 Attempting auto-install...');
-    await AutoInstallHelper.triggerAutoInstall(path);
-    print('✅ APK installation initiated');
-
-    if (newVersion != null) {
-      await markUpdateInstalled(newVersion);
-    }
-
-    await cleanupOldApks(path);
-    await clearPendingInstallation();
-
-    if (exitAfterInstall) {
-      print('🚪 Exiting app after installation...');
-      await Future.delayed(const Duration(seconds: 2));
-      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-    }
-  }
 
   // 🔹 OPEN APP
   static Future<void> openApp() async {
@@ -424,6 +572,7 @@ class WaulyAppManager {
 
     await intent.launch();
   }
+  
 
   //🔹 MAIN FLOW
   static Future<void> handleAppFlow(BuildContext context) async {
@@ -441,6 +590,8 @@ class WaulyAppManager {
 
     print('📱 Installed version: $installedVersion');
     print('🌐 Latest version: ${latest?.version ?? 'null'}');
+    print('🔍 Latest exeUrl: ${latest?.exeUrl ?? 'null'}');
+    print('🔍 Latest fileName: ${latest?.fileName ?? 'null'}');
 
     if (latest == null) {
       print('⚠️ Could not fetch latest version from server');
@@ -451,7 +602,8 @@ class WaulyAppManager {
         final defaultApkUrl =
             'https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk';
         await downloadAndInstall(defaultApkUrl, 'wauly.apk',
-            exitAfterInstall: true, newVersion: '', context: context);
+            exitAfterInstall: true, newVersion: '', context: context,
+            showDialog: true);
       }
       return;
     }
@@ -466,6 +618,7 @@ class WaulyAppManager {
           exitAfterInstall: true,
           newVersion: latest.version,
           context: context,
+          showDialog: false,
         );
       }
       return;
@@ -482,12 +635,20 @@ class WaulyAppManager {
       return;
     }
 
-    if (isNewerVersion(installedVersion, latest.version)) {
+    final needsUpdate = isNewerVersion(installedVersion, latest.version);
+    print('🔍 Needs update: $needsUpdate');
+
+    if (needsUpdate) {
       print('🆕 New version available! $installedVersion → ${latest.version}');
-      final shouldUpdate =
-          await _showUpdateDialog(context, installedVersion, latest.version);
+
+      // ADD A DELAY TO SEE THE DIALOG
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      final shouldUpdate = await _showUpdateDialog(context, installedVersion, latest.version);
+      print('🔍 User chose to update: $shouldUpdate');
 
       if (shouldUpdate) {
+        print('🚀 Starting download and install...');
         await downloadAndInstall(
           latest.exeUrl,
           latest.fileName,
@@ -559,29 +720,70 @@ class WaulyAppManager {
         false;
   }
 
+  // static Future<bool> _showUpdateDialog(
+  //     BuildContext context, String current, String latest) async {
+  //   print('🔴 SHOWING UPDATE DIALOG - Current: $current, Latest: $latest');
+  //   final result = await showDialog<bool>(
+  //         context: context,
+  //         barrierDismissible: false,
+  //         builder: (_) => AlertDialog(
+  //           title: const Text('Update Available'),
+  //           content: Text(
+  //               'A new version ($latest) is available.\n\nCurrent version: $current\n\nUpdate will download and install. The app will restart after installation.'),
+  //           actions: [
+  //             TextButton(
+  //                 onPressed: () {
+  //                   print('🔴 User clicked LATER');
+  //                   Navigator.pop(context, false);
+  //                 },
+  //                 child: const Text('Later')),
+  //             ElevatedButton(
+  //               onPressed: () {
+  //                 print('🔴 User clicked UPDATE NOW');
+  //                 Navigator.pop(context, true);
+  //               },
+  //               style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+  //               child: const Text('Update Now'),
+  //             ),
+  //           ],
+  //         ),
+  //       ) ??
+  //       false;
+
+  //   print('🔴 Dialog result: $result');
+  //   return result;
+  // }
+
+
+  
+  
   static Future<bool> _showUpdateDialog(
       BuildContext context, String current, String latest) async {
-    return await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => AlertDialog(
-            title: const Text('Update Available'),
-            content: Text(
-                'A new version ($latest) is available.\n\nCurrent version: $current\n\nUpdate will download and install. The app will restart after installation.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Later')),
-              ElevatedButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                  ),
-                  child: const Text('Update Now')),
-            ],
-          ),
-        ) ??
-        false;
+    print('🔴 SHOWING UPDATE DIALOG - Current: $current, Latest: $latest');
+
+    final completer = Completer<bool>();
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => AutoClickableAlertDialog(
+        title: 'Update Available',
+        content:
+            'A new version ($latest) is available.\n\nCurrent version: $current\n\nUpdate will download and install. The app will restart after installation.',
+        currentVersion: current,
+        latestVersion: latest,
+        onUpdateNow: () {
+          print('🤖 Update Now clicked (auto or manual)');
+          completer.complete(true);
+        },
+        onLater: () {
+          print('🔴 Later clicked');
+          completer.complete(false);
+        },
+      ),
+    );
+
+    return await completer.future;
   }
 
   static Future<bool> _showInstallDialog(BuildContext context) async {

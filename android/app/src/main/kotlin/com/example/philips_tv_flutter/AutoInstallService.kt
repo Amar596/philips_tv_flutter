@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 
+
 class AutoInstallService : AccessibilityService() {
     
     companion object {
@@ -16,6 +17,7 @@ class AutoInstallService : AccessibilityService() {
         private var installClicked = false
         private var openClicked = false
         private var retryCount = 0
+        private var updateDialogClicked = false
         
         fun autoClickInstall() {
             Log.d(TAG, "autoClickInstall called")
@@ -26,37 +28,101 @@ class AutoInstallService : AccessibilityService() {
             installClicked = false
             openClicked = false
             retryCount = 0
+            updateDialogClicked = false
             Log.d(TAG, "Flags reset")
         }
-    }
-    
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        instance = this
-        
-        val info = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPES_ALL_MASK
-            feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
-                    AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE or
-                    AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
-            notificationTimeout = 50
+
+        fun autoClickUpdateButton(buttonText: String) {
+            Log.d(TAG, "autoClickUpdateButton called for: $buttonText")
+            instance?.clickDialogButton(buttonText)
         }
-        setServiceInfo(info)
         
-        Log.d(TAG, "✅ Accessibility Service Connected and Configured")
-        
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (!installClicked) {
-                findAndClickInstallButton()
+        fun checkForUpdateDialog(): Boolean {
+            return instance?.isUpdateDialogShowing() ?: false
+        }
+    }
+
+    private fun showToast(message: String) {
+    Handler(Looper.getMainLooper()).post {
+        android.widget.Toast.makeText(
+            this@AutoInstallService,
+            message,
+            android.widget.Toast.LENGTH_LONG
+        ).show()
+    }
+    }
+
+    fun forceCheckForDialog() {
+    Log.d(TAG, "Force checking for dialog...")
+    val root = rootInActiveWindow
+    if (root != null) {
+        Log.d(TAG, "Root window available, searching for dialog...")
+        findAndClickUpdateDialogButton()
+    } else {
+        Log.d(TAG, "Root window is null, cannot detect dialog")
+        // Try to get the active window through another method
+        try {
+            val windows = windows
+            if (windows != null) {
+                Log.d(TAG, "Found ${windows.size} windows")
+                for (window in windows) {
+                    Log.d(TAG, "Window: ${window.root}")
+                    if (window.root != null) {
+                        findAndClickUpdateDialogButton()
+                        break
+                    }
+                }
             }
-        }, 500)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting windows: ${e.message}")
+        }
+    }
+    }
+
+    override fun onServiceConnected() {
+    super.onServiceConnected()
+    instance = this
+    
+    val info = AccessibilityServiceInfo().apply {
+        eventTypes = AccessibilityEvent.TYPES_ALL_MASK
+        feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
+        // CRITICAL: These flags are needed to retrieve window content
+        flags = AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REQUEST_TOUCH_EXPLORATION_MODE or
+                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+        notificationTimeout = 100
+        // Add this to ensure we can see all windows
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        }
+    }
+    setServiceInfo(info)
+    
+    Log.d(TAG, "✅ Accessibility Service Connected and Configured")
+    Log.d(TAG, "Service info flags: ${info.flags}")
+    
+    // Test if we can get root window
+    Handler(Looper.getMainLooper()).postDelayed({
+        val root = rootInActiveWindow
+        if (root != null) {
+            Log.d(TAG, "✅ Can access root window")
+            
+        } else {
+            Log.d(TAG, "❌ Cannot access root window - check accessibility permissions")
+        }
+    }, 1000)
     }
     
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val packageName = event?.packageName?.toString() ?: return
         
         Log.d(TAG, "Event: pkg=$packageName, type=${event.eventType}, class=${event.className}")
+
+        // NEW: Check for update dialog from our app first
+        if (packageName == "com.example.philips_tv_flutter" || 
+            packageName == "com.example.wauly_app") {
+            handleAppDialog(event)
+        }
         
         val isInstallerRelated = packageName.contains("packageinstaller") ||
                                  packageName == "com.android.packageinstaller" ||
@@ -93,6 +159,285 @@ class AutoInstallService : AccessibilityService() {
                     findAndClickOpenButton()
                 }
             }, 1000)
+        }
+    }
+
+    // NEW METHOD: Handle app's own dialogs
+    private fun handleAppDialog(event: AccessibilityEvent?) {
+        when (event?.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED,
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    if (!updateDialogClicked) {
+                        findAndClickUpdateDialogButton()
+                    }
+                }, 300)
+            }
+        }
+    }
+
+
+    // IMPROVED: Better dialog detection and button clicking
+        private fun findAndClickUpdateDialogButton() {
+        Log.d(TAG, "🔍 Searching for update dialog buttons...")
+        
+        // Try multiple ways to get the root view
+        var root = rootInActiveWindow
+        
+        // If root is null, try to get from windows
+        if (root == null) {
+            try {
+                val windows = windows
+                if (windows != null && windows.isNotEmpty()) {
+                    for (window in windows) {
+                        if (window.root != null) {
+                            root = window.root
+                            Log.d(TAG, "Got root from window")
+                            break
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting windows: ${e.message}")
+            }
+        }
+        
+        if (root == null) {
+            Log.d(TAG, "Root window is null for update dialog")
+            return
+        }
+        
+        // Search for ANY button with "Update" or "Update Now" text
+        val allButtons = mutableListOf<AccessibilityNodeInfo>()
+        collectAllButtons(root, allButtons)
+        
+        Log.d(TAG, "Found ${allButtons.size} total buttons")
+        
+        for (button in allButtons) {
+            val buttonText = button.text?.toString() ?: ""
+            val className = button.className?.toString() ?: ""
+            
+            Log.d(TAG, "Button found: text='$buttonText', class='$className', clickable=${button.isClickable}")
+            
+            // Check if this is the "Update Now" button
+            if (buttonText.contains("Update Now", ignoreCase = true) ||
+                buttonText.equals("Update", ignoreCase = true) ||
+                buttonText.equals("UPDATE", ignoreCase = true) ||
+                buttonText.contains("Install", ignoreCase = true)) {
+                
+                Log.d(TAG, "✅ Found target button: '$buttonText'")
+                val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (clicked) {
+                    updateDialogClicked = true
+                    Log.d(TAG, "✅ Successfully clicked: '$buttonText'")
+                    return
+                }
+            }
+        }
+        
+        // If not found, try to find by ID (Flutter dialog buttons often have specific IDs)
+        findAndClickByViewId(root)
+    }
+
+    private fun collectAllButtons(node: AccessibilityNodeInfo, buttons: MutableList<AccessibilityNodeInfo>) {
+    // Check if this node is a button
+    val className = node.className?.toString() ?: ""
+    if (className.contains("Button", ignoreCase = true) && node.isClickable) {
+        buttons.add(node)
+    }
+    
+    // Also check nodes that are clickable even if not Button class
+    if (node.isClickable && node.isEnabled && node.text?.isNotEmpty() == true) {
+        buttons.add(node)
+    }
+    
+    // Recursively check children
+    for (i in 0 until node.childCount) {
+        val child = node.getChild(i)
+        if (child != null) {
+            collectAllButtons(child, buttons)
+            child.recycle()
+        }
+    }
+    }
+
+    private fun findAndClickByViewId(root: AccessibilityNodeInfo) {
+    // Common Flutter dialog button IDs
+    val buttonIds = listOf(
+        "android:id/button1",           // Positive button
+        "android:id/button2",           // Negative button  
+        "android:id/button3",           // Neutral button
+        "com.example.philips_tv_flutter:id/button1",
+        "com.example.philips_tv_flutter:id/button2"
+    )
+    
+    for (id in buttonIds) {
+        val button = findButtonById(root, listOf(id))
+        if (button != null && button.isClickable) {
+            val buttonText = button.text?.toString() ?: ""
+            Log.d(TAG, "Found button by ID: $id, text='$buttonText'")
+            val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            if (clicked) {
+                updateDialogClicked = true
+                Log.d(TAG, "✅ Successfully clicked button with ID: $id")
+                return
+            }
+        }
+    }
+    }
+
+    // Add this method to search for text anywhere in the hierarchy
+    private fun findTextInAnyNode(node: AccessibilityNodeInfo, searchText: String): Boolean {
+        val nodeText = node.text?.toString()
+        if (nodeText != null && nodeText.contains(searchText, ignoreCase = true)) {
+            Log.d(TAG, "Found text '$searchText' in node: $nodeText")
+            return true
+        }
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = findTextInAnyNode(child, searchText)
+                child.recycle()
+                if (found) return true
+            }
+        }
+        return false
+    }
+
+    // Add this method to force click at coordinates (as fallback)
+    private fun forceClickAtCoordinates() {
+        // Get screen dimensions and click at typical dialog button position
+        // You may need to adjust these coordinates based on your screen
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val screenHeight = displayMetrics.heightPixels
+        
+        // Typically dialog buttons are at the bottom center
+        val x = (screenWidth / 2).toFloat()
+        val y = (screenHeight * 0.85).toFloat()
+        
+        Log.d(TAG, "Force clicking at coordinates: ($x, $y)")
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            val path = android.graphics.Path()
+            path.moveTo(x, y)
+            val gesture = android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 100))
+                .build()
+            
+            dispatchGesture(gesture, object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: android.accessibilityservice.GestureDescription?) {
+                    Log.d(TAG, "✅ Force click completed")
+                    updateDialogClicked = true
+                }
+                
+                override fun onCancelled(gestureDescription: android.accessibilityservice.GestureDescription?) {
+                    Log.d(TAG, "❌ Force click cancelled")
+                }
+            }, null)
+        }
+    }
+
+
+    private fun isUpdateDialogShowing(root: AccessibilityNodeInfo? = rootInActiveWindow): Boolean {
+        root ?: return false
+        
+        val hasUpdateText = findTextInNode(root, listOf("Update Available", "New Version", "Update Now", "新版本"))
+        
+        if (hasUpdateText != null) {
+            Log.d(TAG, "Found update dialog text: ${hasUpdateText.text}")
+            return true
+        }
+        
+        val dialog = findDialogContainer(root)
+        if (dialog != null) {
+            Log.d(TAG, "Found dialog container")
+            return true
+        }
+        
+        return false
+    }
+
+    // NEW METHOD: Find text in node hierarchy
+    private fun findTextInNode(node: AccessibilityNodeInfo, texts: List<String>): AccessibilityNodeInfo? {
+        val nodeText = node.text?.toString()
+        if (nodeText != null) {
+            for (text in texts) {
+                if (nodeText.contains(text, ignoreCase = true)) {
+                    return node
+                }
+            }
+        }
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = findTextInNode(child, texts)
+                if (found != null) return found
+                child.recycle()
+            }
+        }
+        return null
+    }
+
+    // NEW METHOD: Find dialog container
+    private fun findDialogContainer(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+        val className = node.className?.toString() ?: ""
+        
+        if (className.contains("AlertDialog") || 
+            className.contains("Dialog") ||
+            className.contains("DialogContainer")) {
+            return node
+        }
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i)
+            if (child != null) {
+                val found = findDialogContainer(child)
+                if (found != null) return found
+                child.recycle()
+            }
+        }
+        return null
+    }
+
+    // NEW METHOD: Click dialog button programmatically
+    private fun clickDialogButton(buttonText: String) {
+        val root = rootInActiveWindow
+        if (root == null) {
+            Log.d(TAG, "Root window is null for dialog button click")
+            return
+        }
+        
+        Log.d(TAG, "🔍 Searching for button: $buttonText")
+        val button = findButtonByText(root, listOf(buttonText))
+        
+        if (button != null && button.isClickable) {
+            Log.d(TAG, "✅ Found button: $buttonText")
+            val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            if (clicked) {
+                updateDialogClicked = true
+                Log.d(TAG, "✅ Button clicked automatically: $buttonText")
+            }
+        } else {
+            Log.d(TAG, "❌ Button not found: $buttonText")
+            // Try alternative button names
+            val alternatives = when (buttonText.lowercase()) {
+                "update now" -> listOf("Update", "Install Now", "OK")
+                "update" -> listOf("Update Now", "Install Now", "OK")
+                else -> listOf(buttonText)
+            }
+            
+            for (alt in alternatives) {
+                val altButton = findButtonByText(root, listOf(alt))
+                if (altButton != null && altButton.isClickable) {
+                    Log.d(TAG, "✅ Found alternative button: $alt")
+                    altButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    updateDialogClicked = true
+                    break
+                }
+            }
         }
     }
     
@@ -213,6 +558,9 @@ class AutoInstallService : AccessibilityService() {
             if (clicked) {
                 openClicked = true
                 Log.d(TAG, "✅ OPEN button clicked successfully! App should launch now.")
+
+                    // SHOW TOAST HERE
+                     showToast("Wauly Signage App has been upgraded to the latest version. Thank you")           
                 retryCount = 0
             } else {
                 Log.d(TAG, "❌ Failed to click OPEN button")
@@ -329,5 +677,144 @@ class AutoInstallService : AccessibilityService() {
         super.onDestroy()
         instance = null
         Log.d(TAG, "Accessibility Service Destroyed")
+    }
+
+
+    private fun isWebViewDialog(root: AccessibilityNodeInfo): Boolean {
+        // Check if any WebView is present
+        var hasWebView = false
+        
+        fun checkForWebView(node: AccessibilityNodeInfo) {
+            val className = node.className?.toString() ?: ""
+            if (className.contains("WebView", ignoreCase = true)) {
+                hasWebView = true
+                Log.d(TAG, "Found WebView: $className")
+                return
+            }
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                checkForWebView(child)
+                child.recycle()
+                if (hasWebView) return
+            }
+        }
+        
+        checkForWebView(root)
+        return hasWebView
+    }
+
+    private fun handleWebViewDialog(root: AccessibilityNodeInfo) {
+    // Find the WebView node
+    var webViewNode: AccessibilityNodeInfo? = null
+    
+    fun findWebView(node: AccessibilityNodeInfo) {
+        val className = node.className?.toString() ?: ""
+        if (className.contains("WebView", ignoreCase = true)) {
+            webViewNode = node
+            return
+        }
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            findWebView(child)
+            child.recycle()
+            if (webViewNode != null) return
+        }
+    }
+    
+    findWebView(root)
+    
+    // Store in a local variable to avoid smart cast issues
+    val webView = webViewNode
+    if (webView != null) {
+        // Try to perform click on the WebView (this might not work directly)
+        // Alternative: We need to inject JavaScript
+        Log.d(TAG, "Attempting to click via WebView node")
+        
+        // Method 1: Try ACTION_CLICK on WebView
+        if (webView.isClickable) {
+            val clicked = webView.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            if (clicked) {
+                updateDialogClicked = true
+                Log.d(TAG, "✅ Clicked on WebView")
+                return
+            }
+        }
+        
+        // Method 2: Send a broadcast to Flutter to execute JavaScript
+        sendWebViewClickBroadcast()
+    }
+    }
+
+    private fun sendWebViewClickBroadcast() {
+        try {
+            val intent = android.content.Intent("CLICK_UPDATE_BUTTON")
+            intent.setPackage("com.example.philips_tv_flutter")
+            sendBroadcast(intent)
+            Log.d(TAG, "📡 Sent broadcast to click update button in WebView")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send broadcast: ${e.message}")
+        }
+    }
+
+    private fun clickNativeDialogButton(root: AccessibilityNodeInfo): Boolean {
+        val allButtons = mutableListOf<AccessibilityNodeInfo>()
+        collectClickableButtons(root, allButtons)
+        
+        Log.d(TAG, "Found ${allButtons.size} clickable buttons")
+        
+        for (button in allButtons) {
+            val buttonText = button.text?.toString() ?: ""
+            val viewId = button.viewIdResourceName ?: ""
+            
+            Log.d(TAG, "Button: text='$buttonText', id='$viewId'")
+            
+            if (buttonText.contains("Update Now", ignoreCase = true) ||
+                buttonText.contains("Update", ignoreCase = true) ||
+                buttonText.contains("Install", ignoreCase = true) ||
+                viewId.contains("button1") ||
+                viewId.contains("positive")) {
+                
+                val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                if (clicked) {
+                    Log.d(TAG, "✅ Clicked button: '$buttonText'")
+                    return true
+                }
+            }
+        }
+        
+        return false
+    }
+
+    private fun collectClickableButtons(node: AccessibilityNodeInfo, buttons: MutableList<AccessibilityNodeInfo>) {
+        if (node.isClickable && node.isEnabled) {
+            buttons.add(node)
+        }
+        
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            collectClickableButtons(child, buttons)
+            child.recycle()
+        }
+    }
+
+    private fun debugPrintAllText(node: AccessibilityNodeInfo) {
+        try {
+            if (node.text?.isNotEmpty() == true) {
+                Log.d(TAG, "Text: '${node.text}', class='${node.className}', clickable=${node.isClickable}")
+            }
+            if (node.contentDescription?.isNotEmpty() == true) {
+                Log.d(TAG, "ContentDesc: '${node.contentDescription}'")
+            }
+            
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i) ?: continue
+                debugPrintAllText(child)
+                child.recycle()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error: ${e.message}")
+        }
     }
 }

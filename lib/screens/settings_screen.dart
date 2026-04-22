@@ -124,43 +124,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Future<void> _testConnection() async {
-  //   try {
-  //     final versionInfo = await WaulyAppManager.fetchLatestVersion();
-  //     if (versionInfo != null) {
-  //       _showSnackBar(
-  //         'Connection successful!\nLatest version: ${versionInfo.version}',
-  //         isError: false,
-  //         duration: const Duration(seconds: 4),
-  //       );
-  //     } else {
-  //       // Check if version URL points to APK instead of XML
-  //       if (WaulyAppManager.versionUrl.toLowerCase().endsWith('.apk')) {
-  //         _showSnackBar(
-  //           '⚠️ Version URL points to APK file, not XML.\n'
-  //           'Create a version.xml file or use separate URLs.\n'
-  //           'APK URL is still valid for downloads.',
-  //           isError: false,
-  //           duration: const Duration(seconds: 5),
-  //         );
-  //       } else {
-  //         _showSnackBar('Could not fetch version info', isError: true);
-  //       }
-  //     }
-  //   } catch (e) {
-  //     if (e.toString().contains('XmlParserException')) {
-  //       _showSnackBar(
-  //         '❌ Version URL must point to XML file (not APK)\n'
-  //         'Current URL: ${WaulyAppManager.versionUrl}',
-  //         isError: true,
-  //         duration: const Duration(seconds: 5),
-  //       );
-  //     } else {
-  //       _showSnackBar('Connection test failed: $e', isError: true);
-  //     }
-  //   }
-  // }
-
   // In _testConnection() method
   Future<void> _testConnection() async {
     try {
