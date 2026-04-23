@@ -100,7 +100,8 @@ class AutoInstallHelper {
       final hasDialog = await isUpdateDialogShowing();
       if (hasDialog) {
         print('🤖 Update dialog detected, auto-clicking Update Now');
-        await Future.delayed(const Duration(milliseconds: 500)); // Small delay for safety
+        await Future.delayed(
+            const Duration(milliseconds: 500)); // Small delay for safety
         await clickDialogButton('Update Now');
       }
     } catch (e) {
@@ -108,7 +109,7 @@ class AutoInstallHelper {
     }
   }
 
-    // ADD THESE TWO NEW METHODS:
+  // ADD THESE TWO NEW METHODS:
 
   // New method specifically for auto-clicking update button (alias for clickDialogButton)
   static Future<void> autoClickUpdateButton(String buttonText) async {
@@ -130,5 +131,4 @@ class AutoInstallHelper {
       print('❌ Failed to force check for dialog: $e');
     }
   }
-
 }

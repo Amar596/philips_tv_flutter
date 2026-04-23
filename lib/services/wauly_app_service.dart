@@ -30,37 +30,37 @@ class AppVersionInfo {
 }
 
 // Add this class before WaulyAppManager class
-  class AutoClickableAlertDialog extends StatefulWidget {
-    final String title;
-    final String content;
-    final String currentVersion;
-    final String latestVersion;
-    final VoidCallback onUpdateNow;
-    final VoidCallback onLater;
+class AutoClickableAlertDialog extends StatefulWidget {
+  final String title;
+  final String content;
+  final String currentVersion;
+  final String latestVersion;
+  final VoidCallback onUpdateNow;
+  final VoidCallback onLater;
 
-    const AutoClickableAlertDialog({
-      Key? key,
-      required this.title,
-      required this.content,
-      required this.currentVersion,
-      required this.latestVersion,
-      required this.onUpdateNow,
-      required this.onLater,
-    }) : super(key: key);
+  const AutoClickableAlertDialog({
+    Key? key,
+    required this.title,
+    required this.content,
+    required this.currentVersion,
+    required this.latestVersion,
+    required this.onUpdateNow,
+    required this.onLater,
+  }) : super(key: key);
 
-    @override
-    State<AutoClickableAlertDialog> createState() =>
-        _AutoClickableAlertDialogState();
-  }
+  @override
+  State<AutoClickableAlertDialog> createState() =>
+      _AutoClickableAlertDialogState();
+}
 
-   class _AutoClickableAlertDialogState extends State<AutoClickableAlertDialog> {
+class _AutoClickableAlertDialogState extends State<AutoClickableAlertDialog> {
   final GlobalKey _updateButtonKey = GlobalKey();
   bool _autoClicked = false;
 
   @override
   void initState() {
     super.initState();
-    
+
     // Auto-click after dialog is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_autoClicked) {
@@ -69,12 +69,13 @@ class AppVersionInfo {
     });
   }
 
-    Future<void> _autoClickUpdateButton() async {
+  Future<void> _autoClickUpdateButton() async {
     // Small delay to ensure dialog is fully rendered
     await Future.delayed(const Duration(milliseconds: 500));
-    
+
     // Find the button by key and click it
-    final RenderBox? renderBox = _updateButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? renderBox =
+        _updateButtonKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox != null) {
       print('🤖 Auto-clicking Update Now button');
       widget.onUpdateNow();
@@ -83,34 +84,33 @@ class AppVersionInfo {
       print('❌ Could not find Update Now button for auto-click');
     }
   }
-  
-      @override
-    Widget build(BuildContext context) {
-      return AlertDialog(
-        title: Text(widget.title),
-        content: Text(widget.content),
-        actions: [
-          TextButton(
-            onPressed: () {
-              widget.onLater();
-              Navigator.pop(context, false);
-            },
-            child: const Text('Later'),
-          ),
-          ElevatedButton(
-            key: _updateButtonKey, // Add key to identify the button
-            onPressed: () {
-              widget.onUpdateNow();
-              Navigator.pop(context, true);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-            child: const Text('Update Now'),
-          ),
-        ],
-      );
-    }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: Text(widget.content),
+      actions: [
+        TextButton(
+          onPressed: () {
+            widget.onLater();
+            Navigator.pop(context, false);
+          },
+          child: const Text('Later'),
+        ),
+        ElevatedButton(
+          key: _updateButtonKey, // Add key to identify the button
+          onPressed: () {
+            widget.onUpdateNow();
+            Navigator.pop(context, true);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+          child: const Text('Update Now'),
+        ),
+      ],
+    );
   }
-  
+}
 
 class WaulyAppManager {
   static const platform = MethodChannel('apk_install');
@@ -225,7 +225,7 @@ class WaulyAppManager {
       // Check if URL points to APK file
       if (url.toLowerCase().endsWith('.apk')) {
         print('⚠️ Direct APK URL detected - skipping XML parsing');
-        String version = '1.0.0';
+        String version = '';
         final fileName = url.split('/').last;
         final versionMatch = RegExp(r'v(\d+\.\d+\.\d+)').firstMatch(fileName);
         if (versionMatch != null) {
@@ -331,7 +331,7 @@ class WaulyAppManager {
       print('Stack trace: ${StackTrace.current}');
       return null;
     }
-  } 
+  }
 
   // 🔹 VERSION COMPARE
   static bool isNewerVersion(String current, String latest) {
@@ -479,17 +479,17 @@ class WaulyAppManager {
           ),
         ) ??
         false;
-  } 
+  }
 
   // 🔹 MODIFIED DOWNLOAD AND INSTALL WITH PENDING STATE
-    static Future<void> downloadAndInstall(String url, String fileName,
-        {bool exitAfterInstall = true,
-        String? newVersion,
-        BuildContext? context,
-        bool showDialog = true}) async {
-      print('🚀 Starting download and install process...');
+  static Future<void> downloadAndInstall(String url, String fileName,
+      {bool exitAfterInstall = true,
+      String? newVersion,
+      BuildContext? context,
+      bool showDialog = true}) async {
+    print('🚀 Starting download and install process...');
 
-        // If showDialog is true, show confirmation dialog first
+    // If showDialog is true, show confirmation dialog first
     // if (showDialog && context != null) {
     //   final confirmed =
     //       await _showInstallConfirmationDialog(context, newVersion ?? '');
@@ -498,65 +498,65 @@ class WaulyAppManager {
     //     return;
     //   }
     // }
-     await AutoInstallHelper.resetAutoClickFlags();
+    await AutoInstallHelper.resetAutoClickFlags();
 
-      if (await Permission.requestInstallPackages.isDenied) {
-        final status = await Permission.requestInstallPackages.request();
-        if (!status.isGranted) throw Exception('Permission denied');
-      }
+    if (await Permission.requestInstallPackages.isDenied) {
+      final status = await Permission.requestInstallPackages.request();
+      if (!status.isGranted) throw Exception('Permission denied');
+    }
 
-      if (await Permission.storage.isDenied) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) throw Exception('Storage permission denied');
-      }
+    if (await Permission.storage.isDenied) {
+      final status = await Permission.storage.request();
+      if (!status.isGranted) throw Exception('Storage permission denied');
+    }
 
-      final path = await downloadApk(url, fileName);
+    final path = await downloadApk(url, fileName);
 
-      // Check if accessibility is enabled
-      final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
+    // Check if accessibility is enabled
+    final isEnabled = await AutoInstallHelper.isAccessibilityEnabled();
 
-      if (!isEnabled) {
-        print('❌ Accessibility not enabled, saving pending state');
+    if (!isEnabled) {
+      print('❌ Accessibility not enabled, saving pending state');
 
-        // Save pending installation
-        await savePendingInstallation(path, newVersion ?? '');
+      // Save pending installation
+      await savePendingInstallation(path, newVersion ?? '');
 
-        // Show dialog and request accessibility
-        if (context != null) {
-          final enable = await _showAccessibilityDialog(context);
-          if (enable) {
-            await openAccessibilitySettings();
-            // App will close here, but state is saved
-            // User must reopen the app manually
-            return;
-          } else {
-            await clearPendingInstallation();
-            throw Exception('Accessibility permission required');
-          }
+      // Show dialog and request accessibility
+      if (context != null) {
+        final enable = await _showAccessibilityDialog(context);
+        if (enable) {
+          await openAccessibilitySettings();
+          // App will close here, but state is saved
+          // User must reopen the app manually
+          return;
         } else {
-          throw Exception(
-              'Accessibility permission required and no context provided');
+          await clearPendingInstallation();
+          throw Exception('Accessibility permission required');
         }
-      }
-
-      // Accessibility is enabled, proceed with installation
-      print('🔧 Attempting auto-install...');
-      await AutoInstallHelper.triggerAutoInstall(path);
-      print('✅ APK installation initiated');
-
-      if (newVersion != null) {
-        await markUpdateInstalled(newVersion);
-      }
-
-      await cleanupOldApks(path);
-      await clearPendingInstallation();
-
-      if (exitAfterInstall) {
-        print('🚪 Exiting app after installation...');
-        await Future.delayed(const Duration(seconds: 2));
-        SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+      } else {
+        throw Exception(
+            'Accessibility permission required and no context provided');
       }
     }
+
+    // Accessibility is enabled, proceed with installation
+    print('🔧 Attempting auto-install...');
+    await AutoInstallHelper.triggerAutoInstall(path);
+    print('✅ APK installation initiated');
+
+    if (newVersion != null) {
+      await markUpdateInstalled(newVersion);
+    }
+
+    await cleanupOldApks(path);
+    await clearPendingInstallation();
+
+    if (exitAfterInstall) {
+      print('🚪 Exiting app after installation...');
+      await Future.delayed(const Duration(seconds: 2));
+      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+    }
+  }
 
   // 🔹 OPEN APP
   static Future<void> openApp() async {
@@ -572,7 +572,6 @@ class WaulyAppManager {
 
     await intent.launch();
   }
-  
 
   //🔹 MAIN FLOW
   static Future<void> handleAppFlow(BuildContext context) async {
@@ -602,7 +601,9 @@ class WaulyAppManager {
         final defaultApkUrl =
             'https://waulymvcapp.blob.core.windows.net/waulymvcdev/Builds/Android/Host/WaulySignage.apk';
         await downloadAndInstall(defaultApkUrl, 'wauly.apk',
-            exitAfterInstall: true, newVersion: '', context: context,
+            exitAfterInstall: true,
+            newVersion: '',
+            context: context,
             showDialog: true);
       }
       return;
@@ -631,6 +632,22 @@ class WaulyAppManager {
 
     if (lastInstalled == latest.version) {
       print('Already installed version ${latest.version}, opening app');
+      // ✅ ADD THE POPUP MESSAGE HERE
+      if (context.mounted) {
+        // Show SnackBar message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '✓ Already installed version ${latest.version}, opening app'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+
+      // Small delay to show the message before opening the app
+      await Future.delayed(Duration(milliseconds: 1500));
       await openApp();
       return;
     }
@@ -644,7 +661,8 @@ class WaulyAppManager {
       // ADD A DELAY TO SEE THE DIALOG
       await Future.delayed(const Duration(milliseconds: 500));
 
-      final shouldUpdate = await _showUpdateDialog(context, installedVersion, latest.version);
+      final shouldUpdate =
+          await _showUpdateDialog(context, installedVersion, latest.version);
       print('🔍 User chose to update: $shouldUpdate');
 
       if (shouldUpdate) {
@@ -663,6 +681,18 @@ class WaulyAppManager {
     } else {
       print('✅ No update needed');
       await markUpdateInstalled(installedVersion);
+      // ✅ ADD POPUP MESSAGE HERE TOO
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ App is up to date (version $installedVersion)'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        await Future.delayed(Duration(milliseconds: 1000));
+      }
       await openApp();
     }
   }
@@ -754,9 +784,6 @@ class WaulyAppManager {
   //   return result;
   // }
 
-
-  
-  
   static Future<bool> _showUpdateDialog(
       BuildContext context, String current, String latest) async {
     print('🔴 SHOWING UPDATE DIALOG - Current: $current, Latest: $latest');

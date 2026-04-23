@@ -21,8 +21,8 @@ import 'dart:math' as math;
 import 'services/wauly_app_service.dart';
 import 'screens/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'services/remote_key_service.dart'; 
-import 'widgets/key_feedback_overlay.dart'; 
+import 'services/remote_key_service.dart';
+import 'widgets/key_feedback_overlay.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -34,25 +34,63 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final GlobalKey _screenshotKey = GlobalKey();
 
-    // Add these variables
+  // Add these variables
   bool _isChecking = false;
   String _statusMessage = '';
   String _statusDetails = '';
+  bool _isOpeningApp = false;
 
-  OverlayEntry? _terminalOverlay;
- 
+  //OverlayEntry? _terminalOverlay;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-      _checkAppUpdate();
+    _autoClickOpenWaulyApp();
+    _checkAppUpdate();
+  }
 
-          // Set up 777 callback for terminal
-    RemoteKeyService.on777Detected = () {
-      print('🎉 777 detected in HomePage - showing terminal');
-      _showTerminalOverlay();
-    };
-  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed && mounted) {
+      // Add a small delay to prevent rapid successive calls
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (mounted) {
+          print('🔄 App resumed - homepage is now active');
+          _autoClickOpenWaulyApp();
+        }
+      });
+    }
+  }
+
+  // Future<void> _autoClickOpenWaulyApp() async {
+  //   await Future.delayed(const Duration(milliseconds: 1500));
+
+  //   if (mounted) {
+  //     print('🤖 Auto-clicking Open Wauly App button');
+  //     await WaulyAppManager.handleAppFlow(context);
+  //   }
+  // }
+
+  Future<void> _autoClickOpenWaulyApp() async {
+    // Prevent multiple simultaneous calls
+    if (_isOpeningApp) {
+      print('⏸️ Already opening Wauly app, skipping...');
+      return;
+    }
+
+    _isOpeningApp = true;
+
+    // Small delay to ensure UI is ready
+    await Future.delayed(const Duration(milliseconds: 1500));
+
+    if (mounted) {
+      print('🤖 Auto-clicking Open Wauly App button (homepage active)');
+      await WaulyAppManager.handleAppFlow(context);
+    }
+    _isOpeningApp = false;
   }
 
   @override
@@ -69,58 +107,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _statusMessage = message ?? '';
       _statusDetails = details ?? '';
     });
-  }
-
-  // Show terminal overlay
-  void _showTerminalOverlay() {
-    // Remove existing overlay if any
-    _removeTerminalOverlay();
-
-    // Show visual feedback
-    KeyFeedbackOverlay.showKeyPressed('777 ✓');
-
-    _terminalOverlay = OverlayEntry(
-      builder: (context) => Material(
-        color: Colors.transparent,
-        child: Stack(
-          children: [
-            // Semi-transparent background
-            GestureDetector(
-              onTap: _removeTerminalOverlay,
-              child: Container(
-                color: Colors.black.withOpacity(0.3),
-              ),
-            ),
-            // Terminal overlay
-            Center(
-              child: Container(
-                margin: const EdgeInsets.all(20),
-                width: MediaQuery.of(context).size.width * 0.9,
-                height: MediaQuery.of(context).size.height * 0.85,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(10),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
-                      blurRadius: 10,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-                child: const TerminalOverlay(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    Overlay.of(context).insert(_terminalOverlay!);
-  }
-
-  void _removeTerminalOverlay() {
-    _terminalOverlay?.remove();
-    _terminalOverlay = null;
   }
 
   Future<void> _checkAppUpdate() async {
@@ -146,7 +132,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _openWaulyApp(String packageName) async {  
+  Future<void> _openWaulyApp(String packageName) async {
     const activityName = 'com.example.wauly_app.MainActivity';
 
     final intent = AndroidIntent(
@@ -459,8 +445,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _showStatusOverlay(show: false);
     }
   }
-  
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -479,14 +464,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           //   onPressed: _showServerInfo,
           //   tooltip: 'Server Configuration',
           // ),
-          IconButton(
-            icon: const Icon(Icons.terminal, color: Colors.greenAccent),
-            onPressed: () {
-              KeyFeedbackOverlay.showKeyPressed('Manual Trigger');
-              RemoteKeyService.manualTrigger();
-            },
-            tooltip: 'Open Terminal (Press 777 on remote)',
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.terminal, color: Colors.greenAccent),
+          //   onPressed: () {
+          //     KeyFeedbackOverlay.showKeyPressed('Manual Trigger');
+          //     RemoteKeyService.manualTrigger();
+          //   },
+          //   tooltip: 'Open Terminal (Press 777 on remote)',
+          // ),
           //Settings button
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white70),

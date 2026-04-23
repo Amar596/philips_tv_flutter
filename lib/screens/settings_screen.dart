@@ -11,7 +11,8 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _ipController = TextEditingController();
-  final TextEditingController _versionUrlController = TextEditingController(); // NEW
+  final TextEditingController _versionUrlController =
+      TextEditingController(); // NEW
   final TextEditingController _apkUrlController = TextEditingController();
   bool _isLoading = false;
 
@@ -214,238 +215,241 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: const Color(0xFF0D1117),
-    appBar: AppBar(
-      backgroundColor: const Color(0xFF161B22),
-      elevation: 0,
-    ),
-    body: _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Info Card
-                Card(
-                  color: Colors.blue.shade900,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0D1117),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF161B22),
+        elevation: 0,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Info Card
+                  Card(
+                    color: Colors.blue.shade900,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  color: Colors.blue.shade300),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Server Configuration',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Option 1: Enter local server IP\n'
+                            'Option 2: Enter direct URLs below (for cloud storage)',
+                            style: TextStyle(color: Colors.grey.shade400),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Version URL Field (for version.xml)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade900,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.info_outline,
-                                color: Colors.blue.shade300),
+                            Icon(Icons.info, size: 16, color: Colors.blue),
                             const SizedBox(width: 8),
                             const Text(
-                              'Server Configuration',
+                              'Option 2a: Version Info URL (XML)',
                               style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
                                 color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Option 1: Enter local server IP\n'
-                          'Option 2: Enter direct URLs below (for cloud storage)',
-                          style: TextStyle(color: Colors.grey.shade400),
+                          'Must point to a version.xml file containing version info',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _versionUrlController,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'https://example.com/version.xml',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade700),
+                            ),
+                            focusedBorder: const OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.blue),
+                            ),
+                            filled: true,
+                            fillColor: Colors.black.withOpacity(0.3),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ),
 
+                  const SizedBox(height: 16),
 
-                const SizedBox(height: 24),
-
-                // Version URL Field (for version.xml)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade900,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.info, size: 16, color: Colors.blue),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Option 2a: Version Info URL (XML)',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                  // APK URL Field
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade900,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: Colors.greenAccent.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.android,
+                                size: 16, color: Colors.greenAccent),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Option 2b: APK Download URL',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Direct URL to the APK file for download',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 11,
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Must point to a version.xml file containing version info',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 11,
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _apkUrlController,
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontFamily: 'monospace',
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'https://example.com/app.apk',
+                            hintStyle: TextStyle(color: Colors.grey.shade600),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade700),
+                            ),
+                            focusedBorder: const OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.greenAccent),
+                            ),
+                            filled: true,
+                            fillColor: Colors.black.withOpacity(0.3),
+                          ),
+                          maxLines: 2,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _saveUrls,
+                          icon: const Icon(Icons.save),
+                          label: const Text('Save'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _versionUrlController,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'https://example.com/version.xml',
-                          hintStyle: TextStyle(color: Colors.grey.shade600),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _testConnection,
+                          icon: const Icon(Icons.wifi),
+                          label: const Text('Test'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey.shade700),
-                          ),
-                          focusedBorder: const OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.blue),
-                          ),
-                          filled: true,
-                          fillColor: Colors.black.withOpacity(0.3),
                         ),
                       ),
                     ],
                   ),
-                ),
 
-                const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
-                // APK URL Field
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade900,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.greenAccent.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.android, size: 16, color: Colors.greenAccent),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Option 2b: APK Download URL',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Direct URL to the APK file for download',
-                        style: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 11,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _apkUrlController,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'https://example.com/app.apk',
-                          hintStyle: TextStyle(color: Colors.grey.shade600),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.grey.shade700),
-                          ),
-                          focusedBorder: const OutlineInputBorder(
-                            borderSide: BorderSide(color: Colors.greenAccent),
-                          ),
-                          filled: true,
-                          fillColor: Colors.black.withOpacity(0.3),
-                        ),
-                        maxLines: 2,
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 32),
-
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _saveUrls,
-                        icon: const Icon(Icons.save),
-                        label: const Text('Save'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
+                  // Reset Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _resetToDefaults,
+                      icon: const Icon(Icons.restore),
+                      label: const Text('Reset to Default Server'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _testConnection,
-                        icon: const Icon(Icons.wifi),
-                        label: const Text('Test'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-
-                // Reset Button
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _resetToDefaults,
-                    icon: const Icon(Icons.restore),
-                    label: const Text('Reset to Default Server'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
                   ),
-                ),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // Current Configuration Display
-                _buildCurrentConfigCard(),
-              ], 
-            ), 
-          ), 
-    ); 
-}
+                  // Current Configuration Display
+                  _buildCurrentConfigCard(),
+                ],
+              ),
+            ),
+    );
+  }
 
   Widget _buildCurrentConfigCard() {
     final ip = _extractIpFromUrl(WaulyAppManager.versionUrl);

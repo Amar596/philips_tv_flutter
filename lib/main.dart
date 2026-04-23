@@ -16,17 +16,17 @@ import 'package:webview_flutter/webview_flutter.dart' show WebViewController;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() async{
-    WidgetsFlutterBinding.ensureInitialized();
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-    final hasPending = await WaulyAppManager.checkAndResumePendingInstallation();
+  final hasPending = await WaulyAppManager.checkAndResumePendingInstallation();
 
   if (hasPending) {
     // App will exit after installation, no need to continue
     return;
   }
 
-    // Initialize terminal services
+  // Initialize terminal services
   TerminalDataService().startCapturing();
   RemoteKeyService.startListening();
 
@@ -36,12 +36,11 @@ void main() async{
     KeyFeedbackOverlay.showKeyPressed('777 ✓');
     showTerminalOverlay();
   };
-  
+
   final documentsDirectory = await getApplicationDocumentsDirectory();
   final path = join(documentsDirectory.path, 'events.db');
   runApp(const WatchdogApp());
 }
-
 
 void showTerminalOverlay() {
   final navigatorState = navigatorKey.currentState;
@@ -76,8 +75,6 @@ void showTerminalOverlay() {
   }
 }
 
-
-
 class WatchdogApp extends StatelessWidget {
   const WatchdogApp({super.key});
 
@@ -106,7 +103,7 @@ class WatchdogApp extends StatelessWidget {
 class WebViewHandler {
   static const MethodChannel _channel = MethodChannel('webview_channel');
   static WebViewController? webViewController;
-  
+
   static void initialize() {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'clickUpdateButton') {
@@ -114,7 +111,7 @@ class WebViewHandler {
       }
     });
   }
-  
+
   static Future<void> clickUpdateButtonInWebView() async {
     if (webViewController != null) {
       // JavaScript to find and click the "Update Now" button
@@ -149,5 +146,3 @@ class WebViewHandler {
     }
   }
 }
-
-
