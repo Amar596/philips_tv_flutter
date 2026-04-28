@@ -7,6 +7,11 @@ import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.app.DownloadManager
+import android.content.Context
+import android.net.Uri
+import android.os.Environment
+import android.widget.Toast
 
 
 class AutoInstallService : AccessibilityService() {
@@ -212,28 +217,48 @@ class AutoInstallService : AccessibilityService() {
         collectAllButtons(root, allButtons)
         
         Log.d(TAG, "Found ${allButtons.size} total buttons")
+
+            for (button in allButtons) {
+        val buttonText = button.text?.toString() ?: ""
         
-        for (button in allButtons) {
-            val buttonText = button.text?.toString() ?: ""
-            val className = button.className?.toString() ?: ""
+        if (buttonText.contains("Update Now", ignoreCase = true) ||
+            buttonText.equals("Update", ignoreCase = true)) {
             
-            Log.d(TAG, "Button found: text='$buttonText', class='$className', clickable=${button.isClickable}")
-            
-            // Check if this is the "Update Now" button
-            if (buttonText.contains("Update Now", ignoreCase = true) ||
-                buttonText.equals("Update", ignoreCase = true) ||
-                buttonText.equals("UPDATE", ignoreCase = true) ||
-                buttonText.contains("Install", ignoreCase = true)) {
+            Log.d(TAG, "✅ Found target button: '$buttonText'")
+            val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            if (clicked) {
+                updateDialogClicked = true
                 
-                Log.d(TAG, "✅ Found target button: '$buttonText'")
-                val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                if (clicked) {
-                    updateDialogClicked = true
-                    Log.d(TAG, "✅ Successfully clicked: '$buttonText'")
-                    return
-                }
+                // ADD THIS LINE - Start downloading the APK
+                startApkDownload("YOUR_APK_DOWNLOAD_URL_HERE")
+                
+                Log.d(TAG, "✅ Successfully clicked: '$buttonText'")
+                return
             }
         }
+    }
+        
+        // for (button in allButtons) {
+        //     val buttonText = button.text?.toString() ?: ""
+        //     val className = button.className?.toString() ?: ""
+            
+        //     Log.d(TAG, "Button found: text='$buttonText', class='$className', clickable=${button.isClickable}")
+            
+        //     // Check if this is the "Update Now" button
+        //     if (buttonText.contains("Update Now", ignoreCase = true) ||
+        //         buttonText.equals("Update", ignoreCase = true) ||
+        //         buttonText.equals("UPDATE", ignoreCase = true) ||
+        //         buttonText.contains("Install", ignoreCase = true)) {
+                
+        //         Log.d(TAG, "✅ Found target button: '$buttonText'")
+        //         val clicked = button.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+        //         if (clicked) {
+        //             updateDialogClicked = true
+        //             Log.d(TAG, "✅ Successfully clicked: '$buttonText'")
+        //             return
+        //         }
+        //     }
+        // }
         
         // If not found, try to find by ID (Flutter dialog buttons often have specific IDs)
         findAndClickByViewId(root)
@@ -357,6 +382,78 @@ class AutoInstallService : AccessibilityService() {
         }
         
         return false
+    }
+
+    // private fun showToast(message: String) {
+    //     Handler(Looper.getMainLooper()).post {
+    //         android.widget.Toast.makeText(
+    //             this@AutoInstallService,
+    //             message,
+    //             android.widget.Toast.LENGTH_LONG
+    //         ).show()
+    //     }
+    // }
+
+    // ADD THIS NEW METHOD HERE
+    private fun showProgressToast(progress: Int) {
+        if (progress % 25 == 0 || progress == 100) { 
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(
+                    this@AutoInstallService, 
+                    "Downloading update: $progress%", 
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    // Add these methods to your AutoInstallService class
+    private fun startApkDownload(downloadUrl: String) {
+        showToast("Starting download...")
+        
+        val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val request = DownloadManager.Request(Uri.parse(downloadUrl)).apply {
+            setTitle("App Update")
+            setDescription("Downloading latest version...")
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "app_update.apk")
+        }
+        
+        val downloadId = downloadManager.enqueue(request)
+        monitorDownloadProgress(downloadId)
+    }
+
+    private fun monitorDownloadProgress(downloadId: Long) {
+        val handler = Handler(Looper.getMainLooper())
+        val downloadManager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        
+        handler.post(object : Runnable {
+            override fun run() {
+                val query = DownloadManager.Query().setFilterById(downloadId)
+                val cursor = downloadManager.query(query)
+                
+                if (cursor.moveToFirst()) {
+                    val bytesDownloaded = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val bytesTotal = cursor.getInt(cursor.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    
+                    if (bytesTotal > 0) {
+                        val progress = (bytesDownloaded * 100 / bytesTotal)
+                        showProgressToast(progress) // This shows the toast at 25%, 50%, 75%, 100%
+                        
+                        if (progress < 100) {
+                            handler.postDelayed(this, 1000) // Check again in 1 second
+                        } else {
+                            showToast("Download complete! Installing update...")
+                            // Trigger the installation
+                            findAndClickInstallButton()
+                        }
+                    } else {
+                        handler.postDelayed(this, 1000)
+                    }
+                }
+                cursor.close()
+            }
+        })
     }
 
     // NEW METHOD: Find text in node hierarchy
