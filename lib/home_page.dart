@@ -40,14 +40,41 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _statusDetails = '';
   bool _isOpeningApp = false;
 
+  // NEW: Auto-open toggle variable
+  bool _autoOpenEnabled = true;
+  bool _isLoaded = false;
+  static const String KEY_AUTO_OPEN_ENABLED = 'auto_open_wauly_enabled';
+
   //OverlayEntry? _terminalOverlay;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _autoClickOpenWaulyApp();
+    _loadAutoOpenSetting().then((_) {
+      if (_autoOpenEnabled) {
+        _autoClickOpenWaulyApp();
+      }
+    });
+    // _loadAutoOpenSetting();
+    // _autoClickOpenWaulyApp();
     _checkAppUpdate();
+  }
+
+  Future<void> _loadAutoOpenSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    _autoOpenEnabled = prefs.getBool(KEY_AUTO_OPEN_ENABLED) ?? true;
+
+    setState(() {
+      _isLoaded = true;
+    });
+  }
+
+// Add this method to save setting
+  Future<void> _saveAutoOpenSetting(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(KEY_AUTO_OPEN_ENABLED, value);
+    print('💾 Auto-open setting saved: $value');
   }
 
   @override
@@ -55,27 +82,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed && mounted) {
-      // Add a small delay to prevent rapid successive calls
+      // ✅ Only trigger if toggle is enabled
+      if (!_autoOpenEnabled) {
+        print('⏸️ Resume ignored - auto-open disabled');
+        return;
+      }
+
       Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          print('🔄 App resumed - homepage is now active');
+        if (mounted && _autoOpenEnabled) {
+          print('🔄 App resumed - auto opening Wauly app');
           _autoClickOpenWaulyApp();
         }
       });
     }
   }
 
-  // Future<void> _autoClickOpenWaulyApp() async {
-  //   await Future.delayed(const Duration(milliseconds: 1500));
-
-  //   if (mounted) {
-  //     print('🤖 Auto-clicking Open Wauly App button');
-  //     await WaulyAppManager.handleAppFlow(context);
-  //   }
-  // }
-
   Future<void> _autoClickOpenWaulyApp() async {
-    // Prevent multiple simultaneous calls
+    // ✅ HARD STOP
+    if (!_autoOpenEnabled) {
+      print('⛔ Auto-open disabled — skipping execution');
+      return;
+    }
+
     if (_isOpeningApp) {
       print('⏸️ Already opening Wauly app, skipping...');
       return;
@@ -83,13 +111,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     _isOpeningApp = true;
 
-    // Small delay to ensure UI is ready
     await Future.delayed(const Duration(milliseconds: 1500));
 
-    if (mounted) {
+    if (mounted && _autoOpenEnabled) {
       print('🤖 Auto-clicking Open Wauly App button (homepage active)');
       await WaulyAppManager.handleAppFlow(context);
     }
+
     _isOpeningApp = false;
   }
 
@@ -459,19 +487,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         centerTitle: true,
         // Add connection indicator to app bar
         actions: [
-          // IconButton(
-          //   icon: const Icon(Icons.cloud_outlined, color: Colors.greenAccent),
-          //   onPressed: _showServerInfo,
-          //   tooltip: 'Server Configuration',
-          // ),
-          // IconButton(
-          //   icon: const Icon(Icons.terminal, color: Colors.greenAccent),
-          //   onPressed: () {
-          //     KeyFeedbackOverlay.showKeyPressed('Manual Trigger');
-          //     RemoteKeyService.manualTrigger();
-          //   },
-          //   tooltip: 'Open Terminal (Press 777 on remote)',
-          // ),
           //Settings button
           IconButton(
             icon: const Icon(Icons.settings, color: Colors.white70),
@@ -506,53 +521,78 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   margin:
                       const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF161B22),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.greenAccent.shade700),
-                  ),
-                  child: Column(
+                  child: Row(
                     children: [
-                      Row(
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.greenAccent),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _statusMessage,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (_statusDetails.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          _statusDetails,
-                          style: TextStyle(
-                            color: Colors.grey.shade400,
-                            fontSize: 12,
-                          ),
-                          textAlign: TextAlign.center,
+                      const CircularProgressIndicator(),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _statusMessage,
+                          style: const TextStyle(color: Colors.white),
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
 
-              const SizedBox(height: 10),
+              // ✅ ALWAYS SHOW TOGGLE (moved outside condition)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: _autoOpenEnabled
+                        ? [
+                            Colors.green.shade900.withOpacity(0.3),
+                            const Color(0xFF161B22)
+                          ]
+                        : [
+                            Colors.grey.shade900.withOpacity(0.3),
+                            const Color(0xFF161B22)
+                          ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _autoOpenEnabled
+                        ? Colors.greenAccent
+                        : Colors.grey.shade700,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _autoOpenEnabled ? Icons.touch_app : Icons.block,
+                      color:
+                          _autoOpenEnabled ? Colors.greenAccent : Colors.grey,
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Text(
+                        _autoOpenEnabled
+                            ? 'Auto-open ENABLED'
+                            : 'Auto-open DISABLED',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    Switch(
+                      value: _autoOpenEnabled,
+                      onChanged: (bool value) async {
+                        setState(() {
+                          _autoOpenEnabled = value;
+                        });
+                        await _saveAutoOpenSetting(value);
+
+                        if (value) {
+                          // Optional: trigger once immediately when turned ON
+                          _autoClickOpenWaulyApp();
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
 
               // Features Section
               const Padding(
