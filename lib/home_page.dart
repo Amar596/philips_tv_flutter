@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,6 +24,8 @@ import 'screens/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services/remote_key_service.dart';
 import 'widgets/key_feedback_overlay.dart';
+import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -40,6 +43,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _statusDetails = '';
   bool _isOpeningApp = false;
 
+  String _appVersion = '';
+  String _currentDateTime = '';
+  late final Timer _timer;
+
   // NEW: Auto-open toggle variable
   bool _autoOpenEnabled = true;
   bool _isLoaded = false;
@@ -51,6 +58,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initVersion();
+    _startClock(); 
     _loadAutoOpenSetting().then((_) {
       if (_autoOpenEnabled) {
         _autoClickOpenWaulyApp();
@@ -97,6 +106,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _initVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    setState(() {
+      _appVersion = '${info.version} (${info.buildNumber})';
+    });
+  }
+
+  void _startClock() {
+    _updateTime(); // initial call
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        _updateTime();
+      }
+    });
+  }
+
+  void _updateTime() {
+    final now = DateTime.now();
+    final formatted = DateFormat('dd MMM yyyy | hh:mm:ss a').format(now);
+
+    setState(() {
+      _currentDateTime = formatted;
+    });
+  }
+
   Future<void> _autoClickOpenWaulyApp() async {
     // ✅ HARD STOP
     if (!_autoOpenEnabled) {
@@ -123,6 +158,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _timer.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -481,7 +517,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B22),
         title: const Text(
-          'Wauly Watchdog Monitor',
+          'Monitor Wauly app events in real-time',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -506,14 +542,55 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               // Subtitle
-              Text(
-                'Monitor Wauly app events in real-time',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
-                  fontSize: 30,
+              // Text(
+              //   'Monitor Wauly app events in real-time',
+              //   style: TextStyle(
+              //     color: Colors.white.withOpacity(0.6),
+              //     fontSize: 30,
+              //   ),
+              // ),
+              const SizedBox(height: 8),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161B22),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: Colors.greenAccent.withOpacity(0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.info_outline,
+                            color: Colors.greenAccent, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Signage App Status',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Version: $_appVersion',
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Time: $_currentDateTime',
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 10),
 
               // Status Overlay (shown during updates/checks)
               if (_isChecking)
@@ -565,12 +642,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       color:
                           _autoOpenEnabled ? Colors.greenAccent : Colors.grey,
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         _autoOpenEnabled
-                            ? 'Auto-open ENABLED'
-                            : 'Auto-open DISABLED',
+                            ? 'Signage App - Auto launch ENABLED'
+                            : 'Signage App - Auto launch DISABLED',
                         style: const TextStyle(color: Colors.white),
                       ),
                     ),
@@ -592,14 +669,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 0),
 
               // Features Section
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20),
               ),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
 
               // Device Details Section
               const DeviceDetails(),
