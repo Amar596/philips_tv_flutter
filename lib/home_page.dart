@@ -59,7 +59,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initVersion();
-    _startClock(); 
+    _startClock();
     _loadAutoOpenSetting().then((_) {
       if (_autoOpenEnabled) {
         _autoClickOpenWaulyApp();
