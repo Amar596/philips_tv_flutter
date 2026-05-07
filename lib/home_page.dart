@@ -43,6 +43,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _statusDetails = '';
   bool _isOpeningApp = false;
 
+  String _totalStorage = 'Calculating...';
+  String _freeStorage = 'Calculating...';
+
   String _appVersion = '';
   String _currentDateTime = '';
   late final Timer _timer;
@@ -51,6 +54,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _autoOpenEnabled = true;
   bool _isLoaded = false;
   static const String KEY_AUTO_OPEN_ENABLED = 'auto_open_wauly_enabled';
+  static const platform = MethodChannel('storage_info');
 
   //OverlayEntry? _terminalOverlay;
 
@@ -60,23 +64,69 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initVersion();
     _startClock();
+    _getStorageInfo();
     _loadAutoOpenSetting().then((_) {
       if (_autoOpenEnabled) {
         _autoClickOpenWaulyApp();
       }
     });
-    // _loadAutoOpenSetting();
-    // _autoClickOpenWaulyApp();
     _checkAppUpdate();
+  }
+
+  // ✅ FIXED: Parse GB-formatted strings back to bytes for progress bar ratio
+  double _parseStorageValue(String formatted) {
+    try {
+      final parts = formatted.split(' ');
+      if (parts.length < 2) return 0;
+      final value = double.tryParse(parts[0]) ?? 0;
+      switch (parts[1]) {
+        case 'GB':
+          return value * 1024 * 1024 * 1024;
+        case 'MB':
+          return value * 1024 * 1024;
+        case 'KB':
+          return value * 1024;
+        default:
+          return value;
+      }
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  // ✅ FIXED: Use native StorageInfo channel which returns accurate bytes
+  Future<void> _getStorageInfo() async {
+    try {
+      final Map result = await platform.invokeMethod('getStorage');
+
+      final double totalBytes = (result['total'] as num).toDouble();
+      final double freeBytes = (result['free'] as num).toDouble();
+
+      if (totalBytes <= 0) throw Exception("Invalid storage data from native");
+
+      final double totalGB = totalBytes / (1024 * 1024 * 1024);
+      final double freeGB = freeBytes / (1024 * 1024 * 1024);
+
+      setState(() {
+        _totalStorage = '${totalGB.toStringAsFixed(2)} GB';
+        _freeStorage = '${freeGB.toStringAsFixed(2)} GB';
+      });
+    } catch (e) {
+      debugPrint("Storage error: $e");
+      setState(() {
+        _totalStorage = 'Unavailable';
+        _freeStorage = 'Unavailable';
+      });
+    }
   }
 
   Future<void> _loadAutoOpenSetting() async {
     final prefs = await SharedPreferences.getInstance();
     _autoOpenEnabled = prefs.getBool(KEY_AUTO_OPEN_ENABLED) ?? true;
 
-    setState(() {
-      _isLoaded = true;
-    });
+    // setState(() {
+    //   _isLoaded = true;
+    // });
   }
 
 // Add this method to save setting
@@ -91,6 +141,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed && mounted) {
+      _getStorageInfo();
       // ✅ Only trigger if toggle is enabled
       if (!_autoOpenEnabled) {
         print('⏸️ Resume ignored - auto-open disabled');
@@ -664,6 +715,112 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           _autoClickOpenWaulyApp();
                         }
                       },
+                    ),
+                  ],
+                ),
+              ),
+
+              // Storage Information Card
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A2027),
+                  borderRadius: BorderRadius.circular(16),
+                  border:
+                      Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.orangeAccent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.storage,
+                              color: Colors.orangeAccent, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Device Storage',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Total Space',
+                                    style: TextStyle(
+                                        color: Colors.grey, fontSize: 12)),
+                                const SizedBox(height: 4),
+                                Text(_totalStorage,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.black26,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Available Space',
+                                    style: TextStyle(
+                                        color: Colors.grey, fontSize: 12)),
+                                const SizedBox(height: 4),
+                                Text(_freeStorage,
+                                    style: const TextStyle(
+                                        color: Colors.lightGreenAccent,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(
+                      value: (_freeStorage != 'Calculating...' &&
+                              _freeStorage != 'Unavailable' &&
+                              _totalStorage != 'Calculating...' &&
+                              _totalStorage != 'Unavailable' &&
+                              _parseStorageValue(_totalStorage) > 0)
+                          ? (_parseStorageValue(_totalStorage) -
+                                  _parseStorageValue(_freeStorage)) /
+                              _parseStorageValue(
+                                  _totalStorage) // shows USED space (conventional)
+                          : 0,
+                      backgroundColor: Colors.grey[800],
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          Colors.orangeAccent),
                     ),
                   ],
                 ),

@@ -20,6 +20,9 @@ import androidx.core.content.FileProvider
 import android.provider.Settings
 import android.content.pm.PackageManager
 import android.content.BroadcastReceiver
+import android.app.usage.StorageStatsManager
+import android.os.storage.StorageManager
+import java.util.UUID
 
 
 class MainActivity : FlutterActivity() {
@@ -37,6 +40,7 @@ class MainActivity : FlutterActivity() {
     private var eventSink: EventChannel.EventSink? = null
     private var eventChannel: EventChannel? = null
     private var remoteKeyChannel: MethodChannel? = null
+    private val CHANNEL = "storage_info"
 
     // Track last key press to avoid duplicates
     private var lastKeyCode: Int = -1
@@ -67,7 +71,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
 
             // Register all plugins
-            GeneratedPluginRegistrant.registerWith(flutterEngine)
+            //GeneratedPluginRegistrant.registerWith(flutterEngine)
 
             // Set up EventChannel
             eventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
@@ -102,6 +106,45 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+             .setMethodCallHandler { call, result ->
+                if (call.method == "getStorage") {
+                    try {
+                        val storageManager = getSystemService(Context.STORAGE_SERVICE) as StorageManager
+
+                        val totalBytes: Long
+                        val freeBytes: Long
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            // ✅ API 26+ — matches exactly what Android Settings shows
+                            val storageStatsManager =
+                                getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+
+                            totalBytes = storageStatsManager.getTotalBytes(StorageManager.UUID_DEFAULT)
+                            freeBytes  = storageStatsManager.getFreeBytes(StorageManager.UUID_DEFAULT)
+                        } else {
+                            // ✅ Fallback for API < 26
+                            val path = android.os.Environment.getDataDirectory()
+                            val stat = android.os.StatFs(path.path)
+                            totalBytes = stat.blockSizeLong * stat.blockCountLong
+                            freeBytes  = stat.blockSizeLong * stat.availableBlocksLong
+                        }
+
+                        Log.d(TAG, "✅ Storage — Total: $totalBytes bytes, Free: $freeBytes bytes")
+
+                        result.success(mapOf(
+                            "total" to totalBytes,
+                            "free"  to freeBytes
+                        ))
+
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Storage error: ${e.message}")
+                        result.error("STORAGE_ERROR", e.message, null)
+                    }
+                } else {
+                    result.notImplemented()
+                }
+            }
 
             // APK MethodChannel for installation operations
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_CHANNEL)
@@ -178,49 +221,7 @@ class MainActivity : FlutterActivity() {
 
             // Add Remote Key Channel
             remoteKeyChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, REMOTE_KEY_CHANNEL)
-                
-            // In MainActivity.kt
-
-            // fun dispatchKeyEvent(event: KeyEvent?): Boolean {
-            //     event?.let {
-            //         // Only process ACTION_DOWN events to avoid duplicates
-            //         if (it.action == KeyEvent.ACTION_DOWN) {
-            //             val keyCode = it.keyCode
-                        
-            //             // Convert keyCode to readable character
-            //             val keyChar = when (keyCode) {
-            //                 KeyEvent.KEYCODE_0 -> "0"
-            //                 KeyEvent.KEYCODE_1 -> "1"
-            //                 KeyEvent.KEYCODE_2 -> "2"
-            //                 KeyEvent.KEYCODE_3 -> "3"
-            //                 KeyEvent.KEYCODE_4 -> "4"
-            //                 KeyEvent.KEYCODE_5 -> "5"
-            //                 KeyEvent.KEYCODE_6 -> "6"
-            //                 KeyEvent.KEYCODE_7 -> "7"
-            //                 KeyEvent.KEYCODE_8 -> "8"
-            //                 KeyEvent.KEYCODE_9 -> "9"
-            //                 else -> null
-            //             }
-                        
-            //             if (keyChar != null) {
-            //                 Log.d(TAG, "🎮 Key pressed: $keyChar (code=$keyCode)")
-                            
-            //                 // Send to Flutter
-            //                 try {
-            //                     remoteKeyChannel?.invokeMethod("onKeyPressed", mapOf(
-            //                         "keyCode" to keyCode,
-            //                         "keyChar" to keyChar,
-            //                         "action" to "down"
-            //                     ))
-            //                 } catch (e: Exception) {
-            //                     Log.e(TAG, "Failed to send key event to Flutter: ${e.message}")
-            //                 }
-            //             }
-            //         }
-            //     }
-                
-            //     return super.dispatchKeyEvent(event)
-            // }
+           
     }
 
     private fun forceEnableAccessibility() {
