@@ -575,13 +575,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // Add connection indicator to app bar
         actions: [
           //Settings button
-          IconButton(
-            icon: const Icon(Icons.settings, color: Colors.white70),
-            onPressed: () {
-              Navigator.pushNamed(context, '/settings');
-            },
-            tooltip: 'Settings',
-          ),
+          // IconButton(
+          //   icon: const Icon(Icons.settings, color: Colors.white70),
+          //   onPressed: () {
+          //     Navigator.pushNamed(context, '/settings');
+          //   },
+          //   tooltip: 'Settings',
+          // ),
           SimpleConnectionIndicator(compact: true),
           SizedBox(width: 16),
         ],
