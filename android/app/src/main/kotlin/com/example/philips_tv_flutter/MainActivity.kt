@@ -49,7 +49,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+        autoEnableAccessibility() 
         Log.d(TAG, "=== onCreate called ===")
         
         // Register the BroadcastReceiver
@@ -65,6 +65,40 @@ class MainActivity : FlutterActivity() {
             
             Log.d(TAG, "✅ BroadcastReceiver registered")
         }
+    }
+
+    // ✅ Method is at CLASS level, not inside onCreate
+    private fun autoEnableAccessibility() {
+        val serviceName = "$packageName/.AutoInstallService"
+        Thread {
+            try {
+                val current = Settings.Secure.getString(
+                    contentResolver,
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+                ) ?: ""
+
+                if (current.contains(serviceName)) {
+                    Log.d(TAG, "✅ Accessibility already enabled, skipping")
+                    return@Thread
+                }
+
+                Log.d(TAG, "🔧 Auto-enabling accessibility via root...")
+
+                val process = Runtime.getRuntime().exec("su")
+                val writer = process.outputStream.bufferedWriter()
+                writer.write("settings put secure enabled_accessibility_services $serviceName\n")
+                writer.flush()
+                writer.write("settings put secure accessibility_enabled 1\n")
+                writer.flush()
+                writer.write("exit\n")
+                writer.flush()
+                process.waitFor()
+
+                Log.d(TAG, "✅ Accessibility auto-enabled successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Could not auto-enable accessibility: ${e.message}")
+            }
+        }.start()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -107,42 +141,42 @@ class MainActivity : FlutterActivity() {
                 }
 
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
-             .setMethodCallHandler { call, result ->
-                if (call.method == "getStorage") {
-                    try {
-                        val storageManager = getSystemService(Context.STORAGE_SERVICE) as StorageManager
-
-                        val totalBytes: Long
-                        val freeBytes: Long
-
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            // ✅ API 26+ — matches exactly what Android Settings shows
-                            val storageStatsManager =
-                                getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
-
-                            totalBytes = storageStatsManager.getTotalBytes(StorageManager.UUID_DEFAULT)
-                            freeBytes  = storageStatsManager.getFreeBytes(StorageManager.UUID_DEFAULT)
-                        } else {
-                            // ✅ Fallback for API < 26
-                            val path = android.os.Environment.getDataDirectory()
-                            val stat = android.os.StatFs(path.path)
-                            totalBytes = stat.blockSizeLong * stat.blockCountLong
-                            freeBytes  = stat.blockSizeLong * stat.availableBlocksLong
-                        }
-
-                        Log.d(TAG, "✅ Storage — Total: $totalBytes bytes, Free: $freeBytes bytes")
-
-                        result.success(mapOf(
-                            "total" to totalBytes,
-                            "free"  to freeBytes
-                        ))
-
-                    } catch (e: Exception) {
-                        Log.e(TAG, "❌ Storage error: ${e.message}")
-                        result.error("STORAGE_ERROR", e.message, null)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "shutdownDevice" -> {
+                        val intent = Intent()
+                        intent.action = "cms.intent.action.SHUTDOWN"
+                        sendBroadcast(intent)
+                        result.success("Shutdown broadcast sent")
                     }
-                } else {
-                    result.notImplemented()
+                    "rebootDevice" -> {
+                        val intent = Intent()
+                        intent.action = "cms.intent.action.REBOOT"
+                        sendBroadcast(intent)
+                        result.success("Reboot broadcast sent")
+                    }
+                    "getStorage" -> {
+                        try {
+                            val storageManager = getSystemService(Context.STORAGE_SERVICE) as StorageManager
+                            val totalBytes: Long
+                            val freeBytes: Long
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                val storageStatsManager =
+                                    getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+                                totalBytes = storageStatsManager.getTotalBytes(StorageManager.UUID_DEFAULT)
+                                freeBytes  = storageStatsManager.getFreeBytes(StorageManager.UUID_DEFAULT)
+                            } else {
+                                val path = android.os.Environment.getDataDirectory()
+                                val stat = android.os.StatFs(path.path)
+                                totalBytes = stat.blockSizeLong * stat.blockCountLong
+                                freeBytes  = stat.blockSizeLong * stat.availableBlocksLong
+                            }
+                            result.success(mapOf("total" to totalBytes, "free" to freeBytes))
+                        } catch (e: Exception) {
+                            result.error("STORAGE_ERROR", e.message, null)
+                        }
+                    }
+                    else -> result.notImplemented()
                 }
             }
 

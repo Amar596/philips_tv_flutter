@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:philips_tv_flutter/device_control.dart';
 import 'package:philips_tv_flutter/widgets/brightness_controller.dart';
 import 'package:philips_tv_flutter/widgets/device_details.dart';
 import 'package:philips_tv_flutter/widgets/screen_capture.dart';
@@ -129,7 +130,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // });
   }
 
-// Add this method to save setting
+  // Add this method to save setting
   Future<void> _saveAutoOpenSetting(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(KEY_AUTO_OPEN_ENABLED, value);
@@ -305,7 +306,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
               keyboardType: TextInputType.url,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             const Text(
               'APK Download URL:',
               style: TextStyle(color: Colors.white70, fontSize: 12),
@@ -329,7 +330,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
               keyboardType: TextInputType.url,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -476,7 +477,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             const Text(
               'Current APK URL:',
               style: TextStyle(
@@ -574,14 +575,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         centerTitle: true,
         // Add connection indicator to app bar
         actions: [
-          //Settings button
-          // IconButton(
-          //   icon: const Icon(Icons.settings, color: Colors.white70),
-          //   onPressed: () {
-          //     Navigator.pushNamed(context, '/settings');
-          //   },
-          //   tooltip: 'Settings',
-          // ),
           SimpleConnectionIndicator(compact: true),
           SizedBox(width: 16),
         ],
@@ -592,15 +585,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Subtitle
-              // Text(
-              //   'Monitor Wauly app events in real-time',
-              //   style: TextStyle(
-              //     color: Colors.white.withOpacity(0.6),
-              //     fontSize: 30,
-              //   ),
-              // ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 0),
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 padding: const EdgeInsets.all(14),
@@ -627,7 +612,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 5),
                     Text(
                       'Version: $_appVersion',
                       style:
@@ -754,7 +739,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 5),
                     Row(
                       children: [
                         Expanded(
@@ -794,7 +779,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 const Text('Available Space',
                                     style: TextStyle(
                                         color: Colors.grey, fontSize: 12)),
-                                const SizedBox(height: 4),
+                                const SizedBox(height: 1),
                                 Text(_freeStorage,
                                     style: const TextStyle(
                                         color: Colors.lightGreenAccent,
@@ -806,7 +791,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 1),
                     LinearProgressIndicator(
                       value: (_freeStorage != 'Calculating...' &&
                               _freeStorage != 'Unavailable' &&
@@ -833,7 +818,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 padding: EdgeInsets.symmetric(horizontal: 20),
               ),
 
-              const SizedBox(height: 10),
+              const SizedBox(height: 1),
 
               // Device Details Section
               const DeviceDetails(),
@@ -850,7 +835,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               // Brightness Controller
               // const BrightnessController(),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 2),
 
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -870,23 +855,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         },
                         icon: const Icon(Icons.play_arrow, color: Colors.black),
                         label: const Text(
-                          'Open Watchdog',
+                          'Watchdog',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: Colors.black,
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.greenAccent,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 8),
 
                     // Open Wauly App Button
                     Expanded(
@@ -894,29 +879,74 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         onPressed: () async {
                           await WaulyAppManager.handleAppFlow(context);
                         },
-                        icon: const Icon(Icons.tv, color: Colors.white),
+                        icon:
+                            const Icon(Icons.tv, color: Colors.white, size: 18),
                         label: const Text(
-                          'Open Wauly App',
+                          'Wauly',
                           style: TextStyle(
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2D3748),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(30),
                           ),
                         ),
                       ),
-                    )
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Shutdown button
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => DeviceControl.shutdown(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                        child: const Text(
+                          "Shutdown",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Reboot button
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => DeviceControl.reboot(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                        ),
+                        child: const Text(
+                          "Reboot",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 24),
             ],
           ),
         ),

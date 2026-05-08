@@ -831,33 +831,6 @@ class WaulyAppManager {
 
     final needsUpdate = isNewerVersion(installedVersion, latest.version);
     print('🔍 Needs update: $needsUpdate');
-
-    // if (needsUpdate) {
-    //   print('🆕 New version available! $installedVersion → ${latest.version}');
-
-    //   // ADD A DELAY TO SEE THE DIALOG
-    //   await Future.delayed(const Duration(milliseconds: 500));
-
-    //   final shouldUpdate =
-    //       await _showUpdateDialog(context, installedVersion, latest.version);
-    //   print('🔍 User chose to update: $shouldUpdate');
-
-    //   if (shouldUpdate) {
-    //     print('🚀 Starting download and install...');
-    //     await downloadAndInstall(
-    //       latest.exeUrl,
-    //       latest.fileName,
-    //       exitAfterInstall: true,
-    //       newVersion: latest.version,
-    //       context: context,
-    //     );
-    //   } else {
-    //     print('⏭️ User chose to update later');
-    //     await openApp();
-    //   }
-    // }
-
-    // ✅ Auto-update silently — skip dialog, go straight to download
     if (needsUpdate) {
       print('🆕 New version available! $installedVersion → ${latest.version}');
       print('🚀 Auto-starting download and install...');
