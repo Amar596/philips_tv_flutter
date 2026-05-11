@@ -15,7 +15,7 @@ class _DeviceDetailsState extends State<DeviceDetails> {
   void initState() {
     super.initState();
     _deviceDetails = {};
-    _getBasicDeviceInfo();
+    //_getBasicDeviceInfo();
   }
 
   void _getBasicDeviceInfo() {
@@ -40,44 +40,44 @@ class _DeviceDetailsState extends State<DeviceDetails> {
     final mediaQuery = MediaQuery.of(context);
 
     // Create a copy of the details with screen info
-    final Map<String, String> allDetails = Map.from(_deviceDetails);
-    allDetails['Screen Size'] =
-        '${mediaQuery.size.width.toStringAsFixed(0)} x ${mediaQuery.size.height.toStringAsFixed(0)}';
-    allDetails['Pixel Ratio'] = mediaQuery.devicePixelRatio.toStringAsFixed(2);
-    allDetails['Screen Width'] =
-        '${mediaQuery.size.width.toStringAsFixed(0)} px';
-    allDetails['Screen Height'] =
-        '${mediaQuery.size.height.toStringAsFixed(0)} px';
-    allDetails['Text Scale'] = mediaQuery.textScaleFactor.toStringAsFixed(2);
+    // final Map<String, String> allDetails = Map.from(_deviceDetails);
+    // allDetails['Screen Size'] =
+    //     '${mediaQuery.size.width.toStringAsFixed(0)} x ${mediaQuery.size.height.toStringAsFixed(0)}';
+    // allDetails['Pixel Ratio'] = mediaQuery.devicePixelRatio.toStringAsFixed(2);
+    // allDetails['Screen Width'] =
+    //     '${mediaQuery.size.width.toStringAsFixed(0)} px';
+    // allDetails['Screen Height'] =
+    //     '${mediaQuery.size.height.toStringAsFixed(0)} px';
+    // allDetails['Text Scale'] = mediaQuery.textScaleFactor.toStringAsFixed(2);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(1),
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161B22),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-      ),
+      // decoration: BoxDecoration(
+      //   color: const Color(0xFF161B22),
+      //   borderRadius: BorderRadius.circular(12),
+      //   border: Border.all(color: Colors.grey.withOpacity(0.3)),
+      // ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          const Row(
-            children: [
-              Icon(Icons.devices, color: Colors.blueAccent, size: 20),
-              SizedBox(width: 8),
-              Text(
-                'Device Information',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
+          // const Row(
+          //   children: [
+          //     Icon(Icons.devices, color: Colors.blueAccent, size: 20),
+          //     SizedBox(width: 8),
+          //     Text(
+          //       'Device Information',
+          //       style: TextStyle(
+          //         color: Colors.white,
+          //         fontSize: 16,
+          //         fontWeight: FontWeight.bold,
+          //       ),
+          //     ),
+          //   ],
+          // ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 1),
 
           // Device Details Content
           Container(
@@ -85,11 +85,11 @@ class _DeviceDetailsState extends State<DeviceDetails> {
               color: Colors.black.withOpacity(0.3),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Column(
-              children: allDetails.entries.map((entry) {
-                return _buildDetailRow(entry.key, entry.value);
-              }).toList(),
-            ),
+            // child: Column(
+            //   children: allDetails.entries.map((entry) {
+            //     return _buildDetailRow(entry.key, entry.value);
+            //   }).toList(),
+            // ),
           ),
         ],
       ),

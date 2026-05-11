@@ -47,6 +47,97 @@ class MainActivity : FlutterActivity() {
     private var lastKeyTime: Long = 0
     private val KEY_DEBOUNCE_MS = 100L
 
+    private var pendingResult: MethodChannel.Result? = null
+
+    // Update the deviceControlReceiver to check if result is still pending
+    // private val deviceControlReceiver = object : BroadcastReceiver() {
+    //     override fun onReceive(context: Context?, intent: Intent?) {
+    //         when (intent?.action) {
+    //             "com.tpv.fq.reply.getModelName" -> {
+    //                 pendingResult?.let { result ->
+    //                     val modelName = intent.getStringExtra("modelName")
+    //                     result.success(modelName)
+    //                     pendingResult = null
+    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
+    //                 }
+    //             }
+    //             "com.tpv.fq.reply.getPlatformName" -> {
+    //                 pendingResult?.let { result ->
+    //                     val platformName = intent.getStringExtra("platformName")
+    //                     result.success(platformName)
+    //                     pendingResult = null
+    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
+    //                 }
+    //             }
+    //             "cms.intent.action.reply.getBACKLIGHT_STATUS" -> {
+    //                 pendingResult?.let { result ->
+    //                     val status = intent.getStringExtra("status")
+    //                     result.success(status)
+    //                     pendingResult = null
+    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
+    //                 }
+    //             }
+    //             "cms.intent.action.reply.getBri" -> {
+    //                 pendingResult?.let { result ->
+    //                     val brightness = intent.getStringExtra("brightness")
+    //                     result.success(brightness)
+    //                     pendingResult = null
+    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    private val deviceControlReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                "com.tpv.fq.reply.getModelName" -> {
+                    pendingResult?.let { result ->
+                        val modelName = intent.getStringExtra("modelName")
+                        result.success(modelName)
+                        pendingResult = null
+                        try { 
+                            unregisterReceiver(this) 
+                        } catch(e: Exception) {
+                            // Receiver already unregistered or not registered
+                        }
+                    }
+                }
+                "com.tpv.fq.reply.getPlatformName" -> {
+                    pendingResult?.let { result ->
+                        val platformName = intent.getStringExtra("platformName")
+                        result.success(platformName)
+                        pendingResult = null
+                        try { 
+                            unregisterReceiver(this) 
+                        } catch(e: Exception) {}
+                    }
+                }
+                "cms.intent.action.reply.getBACKLIGHT_STATUS" -> {
+                    pendingResult?.let { result ->
+                        val status = intent.getStringExtra("status")
+                        result.success(status)
+                        pendingResult = null
+                        try { 
+                            unregisterReceiver(this) 
+                        } catch(e: Exception) {}
+                    }
+                }
+                "cms.intent.action.reply.getBri" -> {
+                    pendingResult?.let { result ->
+                        val brightness = intent.getStringExtra("brightness")
+                        result.success(brightness)
+                        pendingResult = null
+                        try { 
+                            unregisterReceiver(this) 
+                        } catch(e: Exception) {}
+                    }
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         autoEnableAccessibility() 
@@ -101,13 +192,48 @@ class MainActivity : FlutterActivity() {
         }.start()
     }
 
+    private fun getSystemProperty(key: String, defaultValue: String = ""): String {
+        return try {
+            val clazz = Class.forName("android.os.SystemProperties")
+            val method = clazz.getMethod("get", String::class.java, String::class.java)
+            method.invoke(null, key, defaultValue) as String
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read system property: $key")
+            defaultValue
+        }
+    }
+
+    private fun getMacAddress(): String {
+    return try {
+        val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+
+        for (intf in java.util.Collections.list(interfaces)) {
+            if (!intf.name.equals("wlan0", ignoreCase = true)) continue
+
+            val macBytes = intf.hardwareAddress ?: return ""
+
+            val builder = StringBuilder()
+            for (b in macBytes) {
+                builder.append(String.format("%02X:", b))
+            }
+
+            if (builder.isNotEmpty()) {
+                builder.deleteCharAt(builder.length - 1)
+            }
+
+            return builder.toString()
+        }
+
+        ""
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to get MAC address", e)
+        ""
+    }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-            // Register all plugins
-            //GeneratedPluginRegistrant.registerWith(flutterEngine)
-
-            // Set up EventChannel
             eventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
             eventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, sink: EventChannel.EventSink) {
@@ -175,6 +301,189 @@ class MainActivity : FlutterActivity() {
                         } catch (e: Exception) {
                             result.error("STORAGE_ERROR", e.message, null)
                         }
+                    }
+                     "setBacklight" -> {
+                        val switchValue = call.argument<String>("switch")
+                        val intent = Intent("cms.intent.action.BACKLIGHT_CNTRL")
+                        intent.putExtra("switch", switchValue)
+                        sendBroadcast(intent)
+                        result.success("Backlight set to: $switchValue")
+                    }
+                    "getBacklightStatus" -> {
+                        pendingResult = result
+                        try {
+                            registerReceiver(deviceControlReceiver, IntentFilter("cms.intent.action.reply.getBACKLIGHT_STATUS"))
+                            val intent = Intent("cms.intent.action.getBACKLIGHT_STATUS")
+                            sendBroadcast(intent)
+                            
+                            // Timeout fallback
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                if (pendingResult != null) {
+                                    val status = getSystemProperty("persist.sys.getBACKLIGHT_STATUS", "0")
+                                    pendingResult?.success(status)
+                                    pendingResult = null
+                                    try { 
+                                        unregisterReceiver(deviceControlReceiver) 
+                                    } catch(e: Exception) {
+                                        // Already unregistered
+                                    }
+                                }
+                            }, 2000)
+                        } catch(e: Exception) {
+                            if (pendingResult != null) {
+                                val status = getSystemProperty("persist.sys.getBACKLIGHT_STATUS", "0")
+                                pendingResult?.success(status)
+                                pendingResult = null
+                            }
+                        }
+                    }
+                    "getModelName" -> {
+                        pendingResult = result
+                        try {
+                            registerReceiver(deviceControlReceiver, IntentFilter("com.tpv.fq.reply.getModelName"))
+                            sendBroadcast(Intent("com.tpv.fq.getModelName"))
+                            
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                if (pendingResult != null) {
+                                    val model = getSystemProperty("ro.product.name", "")
+                                    pendingResult?.success(model)
+                                    pendingResult = null
+                                    try { 
+                                        unregisterReceiver(deviceControlReceiver) 
+                                    } catch(e: Exception) {
+                                        // Receiver already unregistered
+                                    }
+                                }
+                            }, 2000)
+                        } catch(e: Exception) {
+                            if (pendingResult != null) {
+                                val model = getSystemProperty("ro.product.name", "")
+                                pendingResult?.success(model)
+                                pendingResult = null
+                            }
+                        }
+                    }
+                    "getPlatformName" -> {
+                        pendingResult = result
+                        try {
+                            registerReceiver(deviceControlReceiver, IntentFilter("com.tpv.fq.reply.getPlatformName"))
+                            sendBroadcast(Intent("com.tpv.fq.getPlatformName"))
+                            
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                if (pendingResult != null) {
+                                    val platform = getSystemProperty("ro.board.platform", "")
+                                    pendingResult?.success(platform)
+                                    pendingResult = null
+                                    try { 
+                                        unregisterReceiver(deviceControlReceiver) 
+                                    } catch(e: Exception) {
+                                        // Receiver already unregistered
+                                    }
+                                }
+                            }, 2000)
+                        } catch(e: Exception) {
+                            if (pendingResult != null) {
+                                val platform = getSystemProperty("ro.board.platform", "")
+                                pendingResult?.success(platform)
+                                pendingResult = null
+                            }
+                        }
+                    }
+                    "getSerialNumber" -> {
+                        val serial = getSystemProperty("ro.serialno", "")
+                        result.success(serial)
+                    }
+                    "getModelNumber" -> {
+                        val model = getSystemProperty("ro.product.model", "")
+                        result.success(model)
+                    }
+                    "getMacAddress" -> {
+                        val mac = getMacAddress()
+                        result.success(mac)
+                    }
+                    "getAllDeviceDetails" -> {
+                        val details = mapOf(
+                            "serialNumber" to getSystemProperty("ro.serialno", ""),
+                            "modelNumber" to getSystemProperty("ro.product.model", ""),
+                            "modelName" to getSystemProperty("ro.product.name", ""),
+                            "platformName" to getSystemProperty("ro.board.platform", ""),
+                            "manufacturer" to android.os.Build.MANUFACTURER,
+                            "device" to android.os.Build.DEVICE
+                        )
+                        result.success(details)
+                    }
+                    "getCurrentRotation" -> {
+                        val rotation = getSystemProperty("persist.sys.screenorientation", "landscape")
+                        result.success(rotation)
+                    }
+                    "setScreenRotation" -> {
+                        val angle = call.argument<String>("angle")
+                        val intent = Intent("cms.intent.action.ScreenRotation")
+                        intent.putExtra("Angle", angle)
+                        sendBroadcast(intent)
+                        result.success("Screen rotation set to: $angle degrees")
+                    }
+                    "setScreenRotationWithBlackScreen" -> {
+                        val angle = call.argument<String>("angle")
+                        // Show black screen
+                        val blackIntent = Intent("cms.intent.action.BLACK_SCREEN")
+                        sendBroadcast(blackIntent)
+                        
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            val intent = Intent("cms.intent.action.ScreenRotation")
+                            intent.putExtra("Angle", angle)
+                            sendBroadcast(intent)
+                        }, 100)
+                        
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            val hideIntent = Intent("cms.intent.action.HIDE_BLACK_SCREEN")
+                            sendBroadcast(hideIntent)
+                        }, 1100)
+                        
+                        result.success("Screen rotation with black screen set to: $angle degrees")
+                    }
+                    "getBrightness" -> {
+                        pendingResult = result
+                        try {
+                            registerReceiver(deviceControlReceiver, IntentFilter("cms.intent.action.reply.getBri"))
+                            val intent = Intent("cms.intent.action.getBri")
+                            sendBroadcast(intent)
+                            
+                            Handler(Looper.getMainLooper()).postDelayed({
+                                if (pendingResult != null) {
+                                    val brightness = getSystemProperty("persist.sys.getBri", "0")
+                                    pendingResult?.success(brightness)
+                                    pendingResult = null
+                                    try { 
+                                        unregisterReceiver(deviceControlReceiver) 
+                                    } catch(e: Exception) {
+                                        // Receiver already unregistered
+                                    }
+                                }
+                            }, 2000)
+                        } catch(e: Exception) {
+                            if (pendingResult != null) {
+                                val brightness = getSystemProperty("persist.sys.getBri", "0")
+                                pendingResult?.success(brightness)
+                                pendingResult = null
+                            }
+                        }
+                    }
+                    "setBrightness" -> {
+                        val brightness = call.argument<String>("brightness")
+                        val intent = Intent("cms.intent.action.setBri")
+                        intent.putExtra("brightness", brightness)
+                        sendBroadcast(intent)
+                        result.success("Brightness set to: $brightness")
+                    }
+                    "getDeviceInfo" -> {
+                        val info = buildString {
+                            appendLine("Serial: ${getSystemProperty("ro.serialno", "N/A")}")
+                            appendLine("Model: ${getSystemProperty("ro.product.model", "N/A")}")
+                            appendLine("Platform: ${getSystemProperty("ro.board.platform", "N/A")}")
+                            appendLine("Android: ${android.os.Build.VERSION.RELEASE}")
+                        }
+                        result.success(info)
                     }
                     else -> result.notImplemented()
                 }
@@ -256,6 +565,18 @@ class MainActivity : FlutterActivity() {
             // Add Remote Key Channel
             remoteKeyChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, REMOTE_KEY_CHANNEL)
            
+    }
+
+    private fun safeUnregisterReceiver(receiver: BroadcastReceiver) {
+    try {
+        unregisterReceiver(receiver)
+    } catch(e: IllegalArgumentException) {
+        // Receiver was not registered
+        Log.d(TAG, "Receiver was not registered: ${e.message}")
+    } catch(e: Exception) {
+        // Other error
+        Log.e(TAG, "Error unregistering receiver: ${e.message}")
+    }
     }
 
     private fun forceEnableAccessibility() {

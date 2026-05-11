@@ -248,6 +248,57 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  Widget _buildRotationButton(String label, int angle) {
+    return ElevatedButton(
+      onPressed: () async {
+        await DeviceControl.setScreenRotation(angle);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Screen rotated to ${label}')),
+        );
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF2D3748),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        minimumSize: const Size(70, 35),
+      ),
+      child: Text(label),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              '$label:',
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _openWaulyApp(String packageName) async {
     const activityName = 'com.example.wauly_app.MainActivity';
 
@@ -813,6 +864,186 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
               const SizedBox(height: 0),
 
+// Device Controls Section
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A2027),
+                  borderRadius: BorderRadius.circular(16),
+                  border:
+                      Border.all(color: Colors.purpleAccent.withOpacity(0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.purpleAccent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.devices,
+                              color: Colors.purpleAccent, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Device Controls',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Backlight Control Row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await DeviceControl.turnScreenOff();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Screen turned OFF')),
+                              );
+                            },
+                            icon: const Icon(Icons.brightness_low,
+                                color: Colors.white),
+                            label: const Text('Screen OFF'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade800,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await DeviceControl.turnScreenOn();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('Screen turned ON')),
+                              );
+                            },
+                            icon: const Icon(Icons.brightness_high,
+                                color: Colors.white),
+                            label: const Text('Screen ON'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green.shade800,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Brightness Slider
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Brightness',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        const SizedBox(height: 8),
+                        FutureBuilder<int>(
+                          future: DeviceControl.getBrightness(),
+                          builder: (context, snapshot) {
+                            return Row(
+                              children: [
+                                const Icon(Icons.brightness_low,
+                                    color: Colors.white70, size: 20),
+                                Expanded(
+                                  child: Slider(
+                                    value: (snapshot.data ?? 50).toDouble(),
+                                    min: 0,
+                                    max: 100,
+                                    activeColor: Colors.purpleAccent,
+                                    onChanged: (value) async {
+                                      await DeviceControl.setBrightness(
+                                          value.toInt());
+                                      setState(() {});
+                                    },
+                                  ),
+                                ),
+                                const Icon(Icons.brightness_high,
+                                    color: Colors.white70, size: 20),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black26,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    '${snapshot.data ?? 50}%',
+                                    style: const TextStyle(color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Screen Rotation Buttons
+                    const Text(
+                      'Screen Rotation',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _buildRotationButton('0°', 0),
+                        _buildRotationButton('90°', 90),
+                        _buildRotationButton('180°', 180),
+                        _buildRotationButton('270°', 270),
+                      ],
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Get Device Details Button
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        await _showDeviceDetailsDialog();
+                      },
+                      icon: const Icon(Icons.info_outline),
+                      label: const Text('Show Device Details'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade800,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 40),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               // Features Section
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 20),
@@ -952,5 +1183,105 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
       ),
     );
+  }
+
+
+  Future<void> _showDeviceDetailsDialog() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+
+      final deviceDetails = {
+        'App Version': '${packageInfo.version} (${packageInfo.buildNumber})',
+        'Platform': Platform.operatingSystem,
+        'OS Version': Platform.operatingSystemVersion,
+        'Hostname': Platform.localHostname,
+        'Processors': Platform.numberOfProcessors.toString(),
+        'Locale': Platform.localeName,
+        'Dart Version': Platform.version.split(' ').first,
+        'Free Storage': _freeStorage,
+        'Total Storage': _totalStorage,
+        'Current Time': _currentDateTime,
+      };
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF161B22),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.devices, color: Colors.blueAccent),
+              SizedBox(width: 8),
+              Text(
+                'Device Details',
+                style: TextStyle(color: Colors.white),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: deviceDetails.entries.map((entry) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 120,
+                          child: Text(
+                            '${entry.key}:',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            entry.value,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Close',
+                style: TextStyle(color: Colors.greenAccent),
+              ),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error showing device details: $e');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to load device details: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }
