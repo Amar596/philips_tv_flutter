@@ -8,6 +8,7 @@ import 'package:philips_tv_flutter/widgets/device_details.dart';
 import 'package:philips_tv_flutter/widgets/screen_capture.dart';
 import 'package:philips_tv_flutter/widgets/screen_rotation.dart';
 import 'package:philips_tv_flutter/widgets/terminal_overlay.dart';
+import 'package:philips_tv_flutter/widgets/usb_control.dart';
 import 'package:philips_tv_flutter/widgets/volume_controller.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'screens/watchdog_screen.dart';
@@ -900,6 +901,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ],
                     ),
                     const SizedBox(height: 12),
+                    
 
                     // Backlight Control Row
                     Row(
@@ -1043,6 +1045,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ],
                 ),
               ),
+
+              // USB Control Section
+              const UsbControl(),
 
               // Features Section
               const Padding(

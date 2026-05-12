@@ -23,6 +23,7 @@ import android.content.BroadcastReceiver
 import android.app.usage.StorageStatsManager
 import android.os.storage.StorageManager
 import java.util.UUID
+import android.hardware.usb.UsbManager
 
 
 class MainActivity : FlutterActivity() {
@@ -41,6 +42,9 @@ class MainActivity : FlutterActivity() {
     private var eventChannel: EventChannel? = null
     private var remoteKeyChannel: MethodChannel? = null
     private val CHANNEL = "storage_info"
+    private val USB_CHANNEL = "com.philips.tv/usb"
+    private var usbEnabled: Boolean? = null
+    private var usbConnected = false
 
     // Track last key press to avoid duplicates
     private var lastKeyCode: Int = -1
@@ -48,46 +52,6 @@ class MainActivity : FlutterActivity() {
     private val KEY_DEBOUNCE_MS = 100L
 
     private var pendingResult: MethodChannel.Result? = null
-
-    // Update the deviceControlReceiver to check if result is still pending
-    // private val deviceControlReceiver = object : BroadcastReceiver() {
-    //     override fun onReceive(context: Context?, intent: Intent?) {
-    //         when (intent?.action) {
-    //             "com.tpv.fq.reply.getModelName" -> {
-    //                 pendingResult?.let { result ->
-    //                     val modelName = intent.getStringExtra("modelName")
-    //                     result.success(modelName)
-    //                     pendingResult = null
-    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
-    //                 }
-    //             }
-    //             "com.tpv.fq.reply.getPlatformName" -> {
-    //                 pendingResult?.let { result ->
-    //                     val platformName = intent.getStringExtra("platformName")
-    //                     result.success(platformName)
-    //                     pendingResult = null
-    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
-    //                 }
-    //             }
-    //             "cms.intent.action.reply.getBACKLIGHT_STATUS" -> {
-    //                 pendingResult?.let { result ->
-    //                     val status = intent.getStringExtra("status")
-    //                     result.success(status)
-    //                     pendingResult = null
-    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
-    //                 }
-    //             }
-    //             "cms.intent.action.reply.getBri" -> {
-    //                 pendingResult?.let { result ->
-    //                     val brightness = intent.getStringExtra("brightness")
-    //                     result.success(brightness)
-    //                     pendingResult = null
-    //                     try { unregisterReceiver(this) } catch(e: Exception) {}
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
 
     private val deviceControlReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -138,11 +102,33 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private val usbReceiver = object : BroadcastReceiver() {
+    override fun onReceive(context: Context?, intent: Intent?) {
+        when (intent?.action) {
+            UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                usbConnected = true
+                Log.d(TAG, "USB device connected")
+            }
+            UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                usbConnected = false
+                Log.d(TAG, "USB device disconnected")
+            }
+        }
+    }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         autoEnableAccessibility() 
         Log.d(TAG, "=== onCreate called ===")
-        
+
+        val usbFilter = IntentFilter().apply {
+            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
+            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        }
+
+        registerReceiver(usbReceiver, usbFilter)
+                
         // Register the BroadcastReceiver
         if (!::receiver.isInitialized) {
             receiver = WaulyEventReceiver()
@@ -233,6 +219,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        //flutterEngine.plugins.add(UsbControlPlugin())
 
             eventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
             eventChannel?.setStreamHandler(object : EventChannel.StreamHandler {
@@ -488,6 +475,46 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+            MethodChannel(flutterEngine.dartExecutor.binaryMessenger,USB_CHANNEL).setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "setUsbState" -> {
+                            try {
+                                val enabled = call.argument<Boolean>("enabled") ?: false
+                                val action = call.argument<String>("action") ?: "disable"
+                                val intent = Intent("cms.intent.action.OnOffUDisk")
+                                intent.putExtra("switch", action)
+                                intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+                                sendBroadcast(intent)
+                                usbEnabled = enabled
+                                Log.d(
+                                    TAG,
+                                    "USB ${if (enabled) "enabled" else "disabled"}"
+                                )
+                                result.success(true)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "USB control failed", e)
+                                result.error(
+                                    "USB_ERROR",
+                                    e.message,
+                                    null
+                                )
+                            }
+                        }
+                        "getUsbStatus" -> {
+                            //result.success(usbEnabled)
+                            result.success(
+                                    mapOf(
+                                        "portsEnabled" to usbEnabled,
+                                        "deviceConnected" to usbConnected
+                                    )
+                                )
+                        }
+                        else -> {
+                            result.notImplemented()
+                        }
+                    }
+                }
 
             // APK MethodChannel for installation operations
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_CHANNEL)
@@ -748,6 +775,7 @@ class MainActivity : FlutterActivity() {
         }
         WaulyEventReceiver.onEventReceived = null
         eventChannel?.setStreamHandler(null)
+        safeUnregisterReceiver(usbReceiver)
     }
 
     override fun onStart() {
