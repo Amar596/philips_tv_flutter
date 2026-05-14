@@ -126,9 +126,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     _autoOpenEnabled = prefs.getBool(KEY_AUTO_OPEN_ENABLED) ?? true;
 
-    // setState(() {
-    //   _isLoaded = true;
-    // });
   }
 
   // Add this method to save setting
@@ -1054,7 +1051,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 padding: EdgeInsets.symmetric(horizontal: 20),
               ),
 
-              const SizedBox(height: 1),
 
               // Device Details Section
               const DeviceDetails(),
@@ -1062,15 +1058,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               // Volume Controller
               const VolumeController(),
 
-              // Screen Rotation
-              // const ScreenRotation(),
-
               // Screen Capture
               ScreenCapture(screenshotKey: _screenshotKey),
-
-              // Brightness Controller
-              // const BrightnessController(),
-
               const SizedBox(height: 2),
 
               Padding(
@@ -1190,10 +1179,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-
   Future<void> _showDeviceDetailsDialog() async {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
+
+      // Fetch model name and serial number from DeviceControl
+      final modelName = await DeviceControl.getModelName();
+      final serialNumber = await DeviceControl.getSerialNumber();
+      final modelNumber = await DeviceControl.getModelNumber();
+      final platformName = await DeviceControl.getPlatformName();
+      final macAddress = await DeviceControl.getMacAddress();
+      final brightness = await DeviceControl.getBrightness();
+      final backlightStatus = await DeviceControl.getBacklightStatus();
+      final currentRotation = await DeviceControl.getCurrentRotation();
 
       final deviceDetails = {
         'App Version': '${packageInfo.version} (${packageInfo.buildNumber})',
@@ -1206,6 +1204,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         'Free Storage': _freeStorage,
         'Total Storage': _totalStorage,
         'Current Time': _currentDateTime,
+        // Add the new device-specific details
+        'Model Name': modelName.isNotEmpty ? modelName : 'Not available',
+        'Model Number': modelNumber.isNotEmpty ? modelNumber : 'Not available',
+        'Serial Number':
+            serialNumber.isNotEmpty ? serialNumber : 'Not available',
+        'Platform Name':
+            platformName.isNotEmpty ? platformName : 'Not available',
+        'MAC Address': macAddress.isNotEmpty ? macAddress : 'Not available',
+        'Brightness': '$brightness%',
+        'Backlight': backlightStatus == '1' ? 'On' : 'Off',
+        'Screen Rotation': currentRotation,
       };
 
       if (!mounted) return;
@@ -1239,7 +1248,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(
-                          width: 120,
+                          width:
+                              130, // Slightly wider to accommodate longer labels
                           child: Text(
                             '${entry.key}:',
                             style: const TextStyle(
