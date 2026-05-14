@@ -45,76 +45,134 @@ class MainActivity : FlutterActivity() {
     private val USB_CHANNEL = "com.philips.tv/usb"
     private var usbEnabled: Boolean? = null
     private var usbConnected = false
+    private val HDMI_CHANNEL = "com.philips.tv/hdmi"
+    private var hdmiSources: List<Map<String, Any>> = emptyList()
+    private var hdmiSignalStatus = false
+    private var hdmiChannel: MethodChannel? = null
 
     // Track last key press to avoid duplicates
     private var lastKeyCode: Int = -1
     private var lastKeyTime: Long = 0
     private val KEY_DEBOUNCE_MS = 100L
 
-    private var pendingResult: MethodChannel.Result? = null
+    private val pendingResults = mutableMapOf<String, MethodChannel.Result>()
 
+    // private val deviceControlReceiver = object : BroadcastReceiver() {
+    //     override fun onReceive(context: Context?, intent: Intent?) {
+    //         when (intent?.action) {
+    //             "com.tpv.fq.reply.getModelName" -> {
+    //                 pendingResult?.let { result ->
+    //                     val modelName = intent.getStringExtra("modelName")
+    //                     result.success(modelName)
+    //                     pendingResult = null
+    //                     try { 
+    //                         unregisterReceiver(this) 
+    //                     } catch(e: Exception) {
+    //                         // Receiver already unregistered or not registered
+    //                     }
+    //                 }
+    //             }
+    //             "com.tpv.fq.reply.getPlatformName" -> {
+    //                 pendingResult?.let { result ->
+    //                     val platformName = intent.getStringExtra("platformName")
+    //                     result.success(platformName)
+    //                     pendingResult = null
+    //                     try { 
+    //                         unregisterReceiver(this) 
+    //                     } catch(e: Exception) {}
+    //                 }
+    //             }
+    //             "cms.intent.action.reply.getBACKLIGHT_STATUS" -> {
+    //                 pendingResult?.let { result ->
+    //                     val status = intent.getStringExtra("status")
+    //                     result.success(status)
+    //                     pendingResult = null
+    //                     try { 
+    //                         unregisterReceiver(this) 
+    //                     } catch(e: Exception) {}
+    //                 }
+    //             }
+    //             "cms.intent.action.reply.getBri" -> {
+    //                 pendingResult?.let { result ->
+    //                     val brightness = intent.getStringExtra("brightness")
+    //                     result.success(brightness)
+    //                     pendingResult = null
+    //                     try { 
+    //                         unregisterReceiver(this) 
+    //                     } catch(e: Exception) {}
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
+
+    // ✅ deviceControlReceiver — use the map
     private val deviceControlReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
-                "com.tpv.fq.reply.getModelName" -> {
-                    pendingResult?.let { result ->
-                        val modelName = intent.getStringExtra("modelName")
-                        result.success(modelName)
-                        pendingResult = null
-                        try { 
-                            unregisterReceiver(this) 
-                        } catch(e: Exception) {
-                            // Receiver already unregistered or not registered
-                        }
-                    }
-                }
-                "com.tpv.fq.reply.getPlatformName" -> {
-                    pendingResult?.let { result ->
-                        val platformName = intent.getStringExtra("platformName")
-                        result.success(platformName)
-                        pendingResult = null
-                        try { 
-                            unregisterReceiver(this) 
-                        } catch(e: Exception) {}
-                    }
-                }
-                "cms.intent.action.reply.getBACKLIGHT_STATUS" -> {
-                    pendingResult?.let { result ->
-                        val status = intent.getStringExtra("status")
-                        result.success(status)
-                        pendingResult = null
-                        try { 
-                            unregisterReceiver(this) 
-                        } catch(e: Exception) {}
-                    }
-                }
-                "cms.intent.action.reply.getBri" -> {
-                    pendingResult?.let { result ->
-                        val brightness = intent.getStringExtra("brightness")
-                        result.success(brightness)
-                        pendingResult = null
-                        try { 
-                            unregisterReceiver(this) 
-                        } catch(e: Exception) {}
-                    }
-                }
+                "com.tpv.fq.reply.getModelName" ->
+                    pendingResults.remove("getModelName")?.success(intent.getStringExtra("modelName"))
+
+                "com.tpv.fq.reply.getPlatformName" ->
+                    pendingResults.remove("getPlatformName")?.success(intent.getStringExtra("platformName"))
+
+                "cms.intent.action.reply.getBACKLIGHT_STATUS" ->
+                    pendingResults.remove("getBacklightStatus")?.success(intent.getStringExtra("status"))
+
+                "cms.intent.action.reply.getBri" ->
+                    pendingResults.remove("getBrightness")?.success(intent.getStringExtra("brightness"))
             }
         }
     }
 
     private val usbReceiver = object : BroadcastReceiver() {
-    override fun onReceive(context: Context?, intent: Intent?) {
-        when (intent?.action) {
-            UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                usbConnected = true
-                Log.d(TAG, "USB device connected")
-            }
-            UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                usbConnected = false
-                Log.d(TAG, "USB device disconnected")
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
+                    usbConnected = true
+                    Log.d(TAG, "USB device connected")
+                }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    usbConnected = false
+                    Log.d(TAG, "USB device disconnected")
+                }
             }
         }
     }
+
+    private val hdmiReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "📡 hdmiReceiver got action: ${intent?.action}")
+            when (intent?.action) {
+                "cms.intent.action.reply.GetHDMISourceList" -> {
+                    val ids = intent.getIntArrayExtra("SourceID")
+                    val names = intent.getStringArrayExtra("SourceName")
+                    val list = mutableListOf<Map<String, Any>>()
+                    if (ids != null && names != null) {
+                        for (i in ids.indices) {
+                            list.add(
+                                mapOf(
+                                    "id" to ids[i],
+                                    "name" to names[i]
+                                )
+                            )
+                        }
+                    }
+                    hdmiSources = list
+                    Log.d(TAG, "HDMI Sources: $hdmiSources")
+                }
+
+                "cms.intent.action.reply.HDMISignalStatus",
+                "cms.intent.action.reply.GetHDMISignalStatus" -> {
+                    val status = intent.getIntExtra("Status", 1)
+                    hdmiSignalStatus = status == 0
+                    Log.d(
+                        TAG,
+                        "HDMI Signal: ${if (hdmiSignalStatus) "Available" else "No Signal"}"
+                    )
+                }
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -128,6 +186,23 @@ class MainActivity : FlutterActivity() {
         }
 
         registerReceiver(usbReceiver, usbFilter)
+
+        val hdmiFilter = IntentFilter().apply {
+        addAction("cms.intent.action.reply.GetHDMISourceList")
+        addAction("cms.intent.action.reply.HDMISignalStatus")
+        addAction("cms.intent.action.reply.GetHDMISignalStatus") 
+        addAction("cms.intent.action.reply.GetActiveSource")
+        }
+
+        registerReceiver(hdmiReceiver, hdmiFilter)
+
+        val deviceControlFilter = IntentFilter().apply {
+            addAction("com.tpv.fq.reply.getModelName")
+            addAction("com.tpv.fq.reply.getPlatformName")
+            addAction("cms.intent.action.reply.getBACKLIGHT_STATUS")
+            addAction("cms.intent.action.reply.getBri")
+        }
+        registerReceiver(deviceControlReceiver, deviceControlFilter)
                 
         // Register the BroadcastReceiver
         if (!::receiver.isInitialized) {
@@ -296,86 +371,123 @@ class MainActivity : FlutterActivity() {
                         sendBroadcast(intent)
                         result.success("Backlight set to: $switchValue")
                     }
+
                     "getBacklightStatus" -> {
-                        pendingResult = result
-                        try {
-                            registerReceiver(deviceControlReceiver, IntentFilter("cms.intent.action.reply.getBACKLIGHT_STATUS"))
-                            val intent = Intent("cms.intent.action.getBACKLIGHT_STATUS")
-                            sendBroadcast(intent)
-                            
-                            // Timeout fallback
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                if (pendingResult != null) {
-                                    val status = getSystemProperty("persist.sys.getBACKLIGHT_STATUS", "0")
-                                    pendingResult?.success(status)
-                                    pendingResult = null
-                                    try { 
-                                        unregisterReceiver(deviceControlReceiver) 
-                                    } catch(e: Exception) {
-                                        // Already unregistered
-                                    }
-                                }
-                            }, 2000)
-                        } catch(e: Exception) {
-                            if (pendingResult != null) {
-                                val status = getSystemProperty("persist.sys.getBACKLIGHT_STATUS", "0")
-                                pendingResult?.success(status)
-                                pendingResult = null
-                            }
-                        }
+                        pendingResults["getBacklightStatus"] = result
+                        sendBroadcast(Intent("cms.intent.action.getBACKLIGHT_STATUS"))
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            pendingResults.remove("getBacklightStatus")?.success(
+                                getSystemProperty("persist.sys.getBACKLIGHT_STATUS", "0")
+                            )
+                        }, 2000)
                     }
                     "getModelName" -> {
-                        pendingResult = result
-                        try {
-                            registerReceiver(deviceControlReceiver, IntentFilter("com.tpv.fq.reply.getModelName"))
-                            sendBroadcast(Intent("com.tpv.fq.getModelName"))
-                            
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                if (pendingResult != null) {
-                                    val model = getSystemProperty("ro.product.name", "")
-                                    pendingResult?.success(model)
-                                    pendingResult = null
-                                    try { 
-                                        unregisterReceiver(deviceControlReceiver) 
-                                    } catch(e: Exception) {
-                                        // Receiver already unregistered
-                                    }
-                                }
-                            }, 2000)
-                        } catch(e: Exception) {
-                            if (pendingResult != null) {
-                                val model = getSystemProperty("ro.product.name", "")
-                                pendingResult?.success(model)
-                                pendingResult = null
-                            }
-                        }
+                        pendingResults["getModelName"] = result
+                        sendBroadcast(Intent("com.tpv.fq.getModelName"))
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            pendingResults.remove("getModelName")?.success(
+                                getSystemProperty("ro.product.name", "")
+                            )
+                        }, 2000)
                     }
                     "getPlatformName" -> {
-                        pendingResult = result
-                        try {
-                            registerReceiver(deviceControlReceiver, IntentFilter("com.tpv.fq.reply.getPlatformName"))
-                            sendBroadcast(Intent("com.tpv.fq.getPlatformName"))
-                            
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                if (pendingResult != null) {
-                                    val platform = getSystemProperty("ro.board.platform", "")
-                                    pendingResult?.success(platform)
-                                    pendingResult = null
-                                    try { 
-                                        unregisterReceiver(deviceControlReceiver) 
-                                    } catch(e: Exception) {
-                                        // Receiver already unregistered
-                                    }
-                                }
-                            }, 2000)
-                        } catch(e: Exception) {
-                            if (pendingResult != null) {
-                                val platform = getSystemProperty("ro.board.platform", "")
-                                pendingResult?.success(platform)
-                                pendingResult = null
-                            }
-                        }
+                        pendingResults["getPlatformName"] = result
+                        sendBroadcast(Intent("com.tpv.fq.getPlatformName"))
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            pendingResults.remove("getPlatformName")?.success(
+                                getSystemProperty("ro.board.platform", "")
+                            )
+                        }, 2000)
                     }
+                    "getBrightness" -> {
+                        pendingResults["getBrightness"] = result
+                        sendBroadcast(Intent("cms.intent.action.getBri"))
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            pendingResults.remove("getBrightness")?.success(
+                                getSystemProperty("persist.sys.getBri", "0")
+                            )
+                        }, 2000)
+                    }
+                    // "getBacklightStatus" -> {
+                    //     pendingResult = result
+                    //     try {
+                    //         registerReceiver(deviceControlReceiver, IntentFilter("cms.intent.action.reply.getBACKLIGHT_STATUS"))
+                    //         val intent = Intent("cms.intent.action.getBACKLIGHT_STATUS")
+                    //         sendBroadcast(intent)
+                            
+                    //         // Timeout fallback
+                    //         Handler(Looper.getMainLooper()).postDelayed({
+                    //             if (pendingResult != null) {
+                    //                 val status = getSystemProperty("persist.sys.getBACKLIGHT_STATUS", "0")
+                    //                 pendingResult?.success(status)
+                    //                 pendingResult = null
+                    //                 try { 
+                    //                     unregisterReceiver(deviceControlReceiver) 
+                    //                 } catch(e: Exception) {
+                    //                     // Already unregistered
+                    //                 }
+                    //             }
+                    //         }, 2000)
+                    //     } catch(e: Exception) {
+                    //         if (pendingResult != null) {
+                    //             val status = getSystemProperty("persist.sys.getBACKLIGHT_STATUS", "0")
+                    //             pendingResult?.success(status)
+                    //             pendingResult = null
+                    //         }
+                    //     }
+                    // }
+                    // "getModelName" -> {
+                    //     pendingResult = result
+                    //     try {
+                    //         registerReceiver(deviceControlReceiver, IntentFilter("com.tpv.fq.reply.getModelName"))
+                    //         sendBroadcast(Intent("com.tpv.fq.getModelName"))
+                            
+                    //         Handler(Looper.getMainLooper()).postDelayed({
+                    //             if (pendingResult != null) {
+                    //                 val model = getSystemProperty("ro.product.name", "")
+                    //                 pendingResult?.success(model)
+                    //                 pendingResult = null
+                    //                 try { 
+                    //                     unregisterReceiver(deviceControlReceiver) 
+                    //                 } catch(e: Exception) {
+                    //                     // Receiver already unregistered
+                    //                 }
+                    //             }
+                    //         }, 2000)
+                    //     } catch(e: Exception) {
+                    //         if (pendingResult != null) {
+                    //             val model = getSystemProperty("ro.product.name", "")
+                    //             pendingResult?.success(model)
+                    //             pendingResult = null
+                    //         }
+                    //     }
+                    // }
+                    // "getPlatformName" -> {
+                    //     pendingResult = result
+                    //     try {
+                    //         registerReceiver(deviceControlReceiver, IntentFilter("com.tpv.fq.reply.getPlatformName"))
+                    //         sendBroadcast(Intent("com.tpv.fq.getPlatformName"))
+                            
+                    //         Handler(Looper.getMainLooper()).postDelayed({
+                    //             if (pendingResult != null) {
+                    //                 val platform = getSystemProperty("ro.board.platform", "")
+                    //                 pendingResult?.success(platform)
+                    //                 pendingResult = null
+                    //                 try { 
+                    //                     unregisterReceiver(deviceControlReceiver) 
+                    //                 } catch(e: Exception) {
+                    //                     // Receiver already unregistered
+                    //                 }
+                    //             }
+                    //         }, 2000)
+                    //     } catch(e: Exception) {
+                    //         if (pendingResult != null) {
+                    //             val platform = getSystemProperty("ro.board.platform", "")
+                    //             pendingResult?.success(platform)
+                    //             pendingResult = null
+                    //         }
+                    //     }
+                    // }
                     "getSerialNumber" -> {
                         val serial = getSystemProperty("ro.serialno", "")
                         result.success(serial)
@@ -429,33 +541,33 @@ class MainActivity : FlutterActivity() {
                         
                         result.success("Screen rotation with black screen set to: $angle degrees")
                     }
-                    "getBrightness" -> {
-                        pendingResult = result
-                        try {
-                            registerReceiver(deviceControlReceiver, IntentFilter("cms.intent.action.reply.getBri"))
-                            val intent = Intent("cms.intent.action.getBri")
-                            sendBroadcast(intent)
+                    // "getBrightness" -> {
+                    //     pendingResult = result
+                    //     try {
+                    //         registerReceiver(deviceControlReceiver, IntentFilter("cms.intent.action.reply.getBri"))
+                    //         val intent = Intent("cms.intent.action.getBri")
+                    //         sendBroadcast(intent)
                             
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                if (pendingResult != null) {
-                                    val brightness = getSystemProperty("persist.sys.getBri", "0")
-                                    pendingResult?.success(brightness)
-                                    pendingResult = null
-                                    try { 
-                                        unregisterReceiver(deviceControlReceiver) 
-                                    } catch(e: Exception) {
-                                        // Receiver already unregistered
-                                    }
-                                }
-                            }, 2000)
-                        } catch(e: Exception) {
-                            if (pendingResult != null) {
-                                val brightness = getSystemProperty("persist.sys.getBri", "0")
-                                pendingResult?.success(brightness)
-                                pendingResult = null
-                            }
-                        }
-                    }
+                    //         Handler(Looper.getMainLooper()).postDelayed({
+                    //             if (pendingResult != null) {
+                    //                 val brightness = getSystemProperty("persist.sys.getBri", "0")
+                    //                 pendingResult?.success(brightness)
+                    //                 pendingResult = null
+                    //                 try { 
+                    //                     unregisterReceiver(deviceControlReceiver) 
+                    //                 } catch(e: Exception) {
+                    //                     // Receiver already unregistered
+                    //                 }
+                    //             }
+                    //         }, 2000)
+                    //     } catch(e: Exception) {
+                    //         if (pendingResult != null) {
+                    //             val brightness = getSystemProperty("persist.sys.getBri", "0")
+                    //             pendingResult?.success(brightness)
+                    //             pendingResult = null
+                    //         }
+                    //     }
+                    // }
                     "setBrightness" -> {
                         val brightness = call.argument<String>("brightness")
                         val intent = Intent("cms.intent.action.setBri")
@@ -515,6 +627,174 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+
+                hdmiChannel = MethodChannel(
+                    flutterEngine.dartExecutor.binaryMessenger,
+                    HDMI_CHANNEL
+                )
+                hdmiChannel?.setMethodCallHandler { call, result ->
+                    when (call.method) {
+                        "getHdmiSources" -> {
+                            try {
+                                sendBroadcast(Intent("cms.intent.action.GetHDMISourceList"))
+                                Handler(Looper.getMainLooper()).postDelayed({
+                                    result.success(hdmiSources)
+                                }, 1000)
+                            } catch (e: Exception) {
+                                result.error("HDMI_LIST_ERROR", e.message, null)
+                            }
+                        }
+                        "getHdmiSignalStatus" -> {
+                            try {
+                                Log.d(TAG, "📤 Sending getHDMISignalStatus broadcast")
+                                //sendBroadcast(Intent("cms.intent.action.getHDMISignalStatus"))
+                                sendBroadcast(Intent("cms.intent.action.getHDMISourceSignalStatus"))
+                                Handler(Looper.getMainLooper()).postDelayed({
+                                     Log.d(TAG, "📥 Returning signal status: $hdmiSignalStatus")
+                                    result.success(mapOf("signalAvailable" to hdmiSignalStatus))
+                                }, 1000)
+                            } catch (e: Exception) {
+                                result.error("HDMI_SIGNAL_ERROR", e.message, null)
+                            }
+                        }
+                        "stopHdmiSignal" -> {
+                            try {
+                                val sourceId = call.argument<Int>("sourceId") ?: 2
+                                Log.d(TAG, "⏹️ Stopping HDMI signal for sourceId: $sourceId")
+                                val intent = Intent("cms.intent.action.StopInputSignal")
+                                intent.putExtra("SourceID", sourceId)
+                                sendBroadcast(intent)
+                                Log.d(TAG, "✅ HDMI stop broadcast sent for sourceId: $sourceId") 
+                                result.success(true)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "❌ HDMI stop failed: ${e.message}") 
+                                result.error("HDMI_STOP_ERROR", e.message, null)
+                            }
+                        }
+                        "switchHdmiSource" -> {
+                            try {
+                                val sourceId = call.argument<Int>("sourceId") ?: 1
+                                Log.d(TAG, "🔄 Switching HDMI to sourceId: $sourceId")
+                                val intent = Intent("cms.intent.action.StartInputSignal")
+                                intent.putExtra("SourceID", sourceId)
+                                sendBroadcast(intent)
+                                Log.d(TAG, "✅ HDMI switch broadcast sent for sourceId: $sourceId")
+                                result.success(true)
+                            } catch (e: Exception) {
+                                Log.e(TAG, "❌ HDMI switch failed: ${e.message}")
+                                result.error("HDMI_SWITCH_ERROR", e.message, null)
+                            }
+                        }
+                        else -> result.notImplemented()
+                    }
+                }
+
+                // MethodChannel(
+                //     flutterEngine.dartExecutor.binaryMessenger,
+                //     HDMI_CHANNEL
+                //     ).setMethodCallHandler { call, result ->
+                //     when (call.method) {
+                //          "getHdmiSources" -> {
+                //     try {
+                //         val intent = Intent(
+                //             "cms.intent.action.GetHDMISourceList"
+                //         )
+                //         sendBroadcast(intent)
+                //         Handler(Looper.getMainLooper()).postDelayed({
+                //         result.success(hdmiSources)
+                //         }, 1000)
+                //     } catch (e: Exception) {
+
+                //         result.error(
+                //             "HDMI_LIST_ERROR",
+                //             e.message,
+                //             null
+                //         )
+                //     }
+                // }
+
+                // "getHdmiSignalStatus" -> {
+                //     try {
+                //         val intent = Intent(
+                //             "cms.intent.action.getHDMISignalStatus"
+                //         )
+                //         sendBroadcast(intent)
+                //         Handler(Looper.getMainLooper()).postDelayed({
+                //             result.success(
+                //                 mapOf(
+                //                     "signalAvailable" to hdmiSignalStatus
+                //                 )
+                //             )
+                //         }, 1000)
+                //     } catch (e: Exception) {
+                //         result.error(
+                //             "HDMI_SIGNAL_ERROR",
+                //             e.message,
+                //             null
+                //         )
+                //     }
+                // }
+
+                // "stopHdmiSignal" -> {
+                //     try {
+                //         val sourceId = call.argument<Int>("sourceId") ?: 2
+                //         val intent = Intent(
+                //             "cms.intent.action.StopInputSignal"
+                //         )
+                //         intent.putExtra(
+                //             "SourceID",
+                //             sourceId
+                //         )
+                //         sendBroadcast(intent)
+                //         result.success(true)
+                //     } catch (e: Exception) {
+
+                //         result.error(
+                //             "HDMI_STOP_ERROR",
+                //             e.message,
+                //             null
+                //         )
+                //     }
+                // }
+
+                // "switchHdmiSource" -> {
+                //     try {
+                //         val sourceId = call.argument<Int>("sourceId") ?: 1
+                //         val intent = Intent("cms.intent.action.StartInputSignal")
+                //         intent.putExtra(
+                //             "SourceID",
+                //             sourceId
+                //         )
+                //         sendBroadcast(intent)
+                //         result.success(true)
+                //     } catch (e: Exception) {
+
+                //         result.error(
+                //             "HDMI_SWITCH_ERROR",
+                //             e.message,
+                //             null
+                //         )
+                //     }
+                // }
+                // else -> {
+                //             result.notImplemented()
+                //         }
+                //     }
+                // }   
+                
+
+
+            // // ✅ Replace the inline creation with assignment to hdmiChannel
+            //    hdmiChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, HDMI_CHANNEL)
+            //     hdmiChannel?.setMethodCallHandler { call, result ->
+            //         when (call.method) {
+            //             "getHdmiSources" -> {  }
+            //             "getHdmiSignalStatus" -> { }
+            //             "stopHdmiSignal" -> { }
+            //             "switchHdmiSource" -> { }
+            //             else -> result.notImplemented()
+            //         }
+            //     }    
 
             // APK MethodChannel for installation operations
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APK_CHANNEL)
@@ -776,6 +1056,8 @@ class MainActivity : FlutterActivity() {
         WaulyEventReceiver.onEventReceived = null
         eventChannel?.setStreamHandler(null)
         safeUnregisterReceiver(usbReceiver)
+        safeUnregisterReceiver(hdmiReceiver)
+        safeUnregisterReceiver(deviceControlReceiver)
     }
 
     override fun onStart() {

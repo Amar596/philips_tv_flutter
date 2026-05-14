@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:philips_tv_flutter/device_control.dart';
 import 'package:philips_tv_flutter/widgets/brightness_controller.dart';
 import 'package:philips_tv_flutter/widgets/device_details.dart';
+import 'package:philips_tv_flutter/widgets/hdmi_control.dart';
 import 'package:philips_tv_flutter/widgets/screen_capture.dart';
 import 'package:philips_tv_flutter/widgets/screen_rotation.dart';
 import 'package:philips_tv_flutter/widgets/terminal_overlay.dart';
@@ -901,7 +902,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    
 
                     // Backlight Control Row
                     Row(
@@ -1048,6 +1048,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
               // USB Control Section
               const UsbControl(),
+              const HdmiControl(),
 
               // Features Section
               const Padding(
@@ -1190,6 +1191,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  
 
   Future<void> _showDeviceDetailsDialog() async {
     try {
